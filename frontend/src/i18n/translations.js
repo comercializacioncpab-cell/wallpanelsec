@@ -159,6 +159,7 @@ export const translations = {
     errors: {
       sessionExpired: "La sesión expiró por inactividad. Por favor selecciona o sube tu foto nuevamente.",
       renderError: "Error renderizando panel decorativo",
+      serverWakingUp: "El servidor en la nube se está iniciando o actualizando. Por favor espera unos segundos y vuelve a presionar Aplicar Cambios.",
       uploadError: "Error al procesar la foto",
       loadDemoError: "Error al cargar la demostración",
     }
@@ -324,6 +325,7 @@ export const translations = {
     errors: {
       sessionExpired: "Session expired due to inactivity. Please reselect or upload your photo.",
       renderError: "Error rendering decorative panel",
+      serverWakingUp: "The cloud server is currently waking up or updating. Please wait a few seconds and tap Apply Changes again.",
       uploadError: "Error processing photo",
       loadDemoError: "Error loading demo room",
     }

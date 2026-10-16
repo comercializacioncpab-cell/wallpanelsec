@@ -212,8 +212,11 @@ export default function App() {
       });
 
       if (!res.ok) {
+        if (res.status === 502 || res.status === 503 || res.status === 504) {
+          throw new Error(t('errors.serverWakingUp'));
+        }
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || 'Error renderizando panel decorativo');
+        throw new Error(errData.detail || t('errors.renderError'));
       }
       const data = await res.json();
       
@@ -222,7 +225,11 @@ export default function App() {
         setActiveTab('compare'); // Cambiar a la vista del comparador antes/después
       }
     } catch (err) {
-      setErrorMessage(err.message || 'Ocurrió un error al aplicar el panel');
+      if (err.name === 'TypeError' || (err.message && err.message.toLowerCase().includes('fetch'))) {
+        setErrorMessage(t('errors.serverWakingUp'));
+      } else {
+        setErrorMessage(err.message || t('errors.renderError'));
+      }
     } finally {
       setIsProcessing(false);
     }
