@@ -29,6 +29,8 @@ class CatalogManager:
         return "General"
 
     def list_catalog_panels(self) -> List[Dict]:
+        if hasattr(self, "_cached_panels") and self._cached_panels:
+            return self._cached_panels
         panels = []
         valid_extensions = {".jpg", ".jpeg", ".png", ".webp"}
         
@@ -51,9 +53,12 @@ class CatalogManager:
                     "url": f"/api/catalog/image/{fname}",
                     "thumbnail_url": f"/api/catalog/image/{fname}"
                 })
+        self._cached_panels = panels
         return panels
 
     def list_demo_rooms(self) -> List[Dict]:
+        if hasattr(self, "_cached_demos") and self._cached_demos:
+            return self._cached_demos
         demos = []
         valid_extensions = {".jpg", ".jpeg", ".png", ".webp"}
         for fname in sorted(os.listdir(DEMO_DIR)):
@@ -67,9 +72,11 @@ class CatalogManager:
                     "title": self._format_panel_name(fname),
                     "url": f"/api/demo-room/{fname}"
                 })
+        self._cached_demos = demos
         return demos
 
     def save_new_panel(self, file_bytes: bytes, original_filename: str) -> Dict:
+        self._cached_panels = None
         # Sanitizar nombre de archivo
         base_name = os.path.splitext(os.path.basename(original_filename))[0].lower().replace(" ", "_")
         ext = os.path.splitext(original_filename)[1].lower()
