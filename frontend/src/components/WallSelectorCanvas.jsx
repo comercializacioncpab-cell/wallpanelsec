@@ -279,15 +279,22 @@ export default function WallSelectorCanvas({
     ctx.restore();
 
     // Si tiene exactamente 4 puntos, autocalibrar la Perspectiva 3D con esos 4 vértices ordenados [TL, TR, BR, BL]
+    let quad = null;
     if (points.length === 4) {
-      const pts = points.map((p) => ({ x: p.x, y: p.y }));
-      const s = pts.map((p) => p.x + p.y);
-      const diff = pts.map((p) => p.x - p.y);
-      const tl = pts[s.indexOf(Math.min(...s))];
-      const br = pts[s.indexOf(Math.max(...s))];
-      const tr = pts[diff.indexOf(Math.max(...diff))];
-      const bl = pts[diff.indexOf(Math.min(...diff))];
-      const quad = [tl, tr, br, bl];
+      const pts = points.map((p) => ({ x: Number(p.x), y: Number(p.y) }));
+      const cx = (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4;
+      const cy = (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4;
+      const angles = pts.map((p) => ({ p, angle: Math.atan2(p.y - cy, p.x - cx) }));
+      angles.sort((a, b) => a.angle - b.angle);
+      const sortedPts = angles.map((a) => a.p);
+      const sums = sortedPts.map((p) => p.x + p.y);
+      const tlIdx = sums.indexOf(Math.min(...sums));
+      quad = [0, 1, 2, 3].map((i) => sortedPts[(tlIdx + i) % 4]);
+      if (quad[1].x < quad[3].x) {
+        const tmp = quad[1];
+        quad[1] = quad[3];
+        quad[3] = tmp;
+      }
       setLocalPerspectiveQuad(quad);
       if (onPerspectiveQuadChange) onPerspectiveQuadChange(quad);
       if (setIs3DActive) setIs3DActive(true);
@@ -298,7 +305,7 @@ export default function WallSelectorCanvas({
     // Guardar y aplicar la máscara inmediatamente en el fondo
     const userMaskPng = getRigidMaskPng(canvas);
     if (onCustomMaskApply) {
-      onCustomMaskApply(userMaskPng, false);
+      onCustomMaskApply(userMaskPng, false, quad);
     }
   }, [polyPoints, penMode, onPerspectiveQuadChange, setIs3DActive, onCustomMaskApply]);
 

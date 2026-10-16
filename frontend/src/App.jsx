@@ -192,7 +192,10 @@ export default function App() {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error('Error renderizando panel decorativo');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Error renderizando panel decorativo');
+      }
       const data = await res.json();
       
       setTransformedImage(data.result_base64 || data.result_url);
@@ -248,10 +251,12 @@ export default function App() {
     }
   };
 
-  // Selección por máscara manual con pincel y borrador
-  const handleCustomMaskApply = (maskBase64, switchToCompare = true) => {
+  // Selección por máscara manual con pincel, borrador o pluma
+  const handleCustomMaskApply = (maskBase64, switchToCompare = true, quadOverride = null) => {
     setSelectedCustomMask(maskBase64);
     setSelectedCustomBox(null);
+    const quadToUse = (quadOverride && quadOverride.length === 4) ? quadOverride : perspectiveQuad;
+    const is3DToUse = quadOverride && quadOverride.length === 4 ? true : is3DActive;
     if (activeImage && selectedPanelId) {
       triggerApplyDecor(
         activeImage.image_id,
@@ -263,8 +268,8 @@ export default function App() {
         null,
         null,
         maskBase64,
-        perspectiveQuad,
-        is3DActive,
+        quadToUse,
+        is3DToUse,
         switchToCompare
       );
     }

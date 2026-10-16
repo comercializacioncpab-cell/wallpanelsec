@@ -45,8 +45,8 @@ class BlendingEngine:
     @staticmethod
     def order_quad_points(pts) -> np.ndarray:
         """
-        Ordena 4 puntos en [TL, TR, BR, BL] de forma matemáticamente robusta
-        para prevenir homografías invertidas, degeneradas o en forma de reloj de arena.
+        Ordena 4 puntos en [TL, TR, BR, BL] de forma 100% geométricamente robusta
+        usando ángulos polares respecto al centroide para garantizar que ningún punto se repita.
         """
         raw_pts = []
         for p in pts:
@@ -55,13 +55,31 @@ class BlendingEngine:
             else:
                 raw_pts.append([float(p[0]), float(p[1])])
         arr = np.array(raw_pts, dtype=np.float32)
-        s = arr.sum(axis=1)
-        diff = arr[:, 0] - arr[:, 1]
-        tl = arr[np.argmin(s)]
-        br = arr[np.argmax(s)]
-        tr = arr[np.argmax(diff)]
-        bl = arr[np.argmin(diff)]
-        return np.array([tl, tr, br, bl], dtype=np.float32)
+        if len(arr) != 4:
+            return arr
+
+        # Calcular centroide geométrico
+        center = np.mean(arr, axis=0)
+
+        # Calcular ángulos polares desde el centroide (-pi a pi)
+        angles = np.arctan2(arr[:, 1] - center[1], arr[:, 0] - center[0])
+
+        # Ordenar puntos en secuencia cíclica por ángulo
+        sorted_indices = np.argsort(angles)
+        sorted_pts = arr[sorted_indices]
+
+        # Encontrar cuál de los 4 vértices es el superior-izquierdo (mínimo x + y)
+        sums = sorted_pts[:, 0] + sorted_pts[:, 1]
+        tl_idx = int(np.argmin(sums))
+
+        # Reordenar cíclicamente para que TL sea el índice 0
+        ordered = [sorted_pts[(tl_idx + i) % 4] for i in range(4)]
+
+        # Asegurar sentido horario: el punto TR (índice 1) debe estar a la derecha de BL (índice 3)
+        if ordered[1][0] < ordered[3][0]:
+            ordered[1], ordered[3] = ordered[3], ordered[1]
+
+        return np.array(ordered, dtype=np.float32)
 
     @classmethod
     def warp_texture_perspective(

@@ -546,16 +546,55 @@ def estimate_perspective(req: EstimatePerspectiveRequest):
 @app.post("/api/apply-decor")
 def apply_decor(req: ApplyDecorRequest):
     session = SESSION_STORE.get(req.image_id)
+    
+    # Auto-rehidratación si la sesión se perdió por reinicio del contenedor/servidor
     if not session:
-        raise HTTPException(status_code=404, detail="Sesión de imagen no encontrada o expirada")
+        matched_file = None
+        for folder in [UPLOAD_DIR, DEMO_DIR]:
+            if not os.path.exists(folder):
+                continue
+            for fname in os.listdir(folder):
+                if fname == req.image_id or fname.startswith(f"{req.image_id}."):
+                    matched_file = os.path.join(folder, fname)
+                    break
+            if matched_file:
+                break
+
+        if matched_file and os.path.exists(matched_file):
+            try:
+                img_bgr = cv2.imread(matched_file)
+                if img_bgr is not None:
+                    detection_res = wall_detector.detect_walls_and_foreground(img_bgr)
+                    wall_masks = {w["id"]: w["mask"] for w in detection_res["walls"]}
+                    session = {
+                        "image_bgr": img_bgr,
+                        "filename": os.path.basename(matched_file),
+                        "walls_info": detection_res["walls"],
+                        "wall_masks": wall_masks,
+                        "foreground_mask": detection_res["foreground_mask"]
+                    }
+                    SESSION_STORE[req.image_id] = session
+            except Exception as e:
+                print(f"[DecorWall AI] Error rehidratando sesión desde {matched_file}: {e}")
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail="La sesión de tu imagen expiró debido al reinicio del servidor. Por favor selecciona una habitación de muestra o sube tu foto de nuevo."
+        )
 
     room_bgr = session["image_bgr"]
     h, w = room_bgr.shape[:2]
 
-    # Cargar panel decorativo
-    panel_path = os.path.join(CATALOG_DIR, req.panel_id)
-    if not os.path.exists(panel_path):
-        raise HTTPException(status_code=404, detail="Panel decorativo no encontrado en el catálogo")
+    # Cargar panel decorativo con fallback resiliente al primer panel disponible
+    panel_path = os.path.join(CATALOG_DIR, req.panel_id) if req.panel_id else None
+    if not panel_path or not os.path.exists(panel_path):
+        available_panels = [f for f in sorted(os.listdir(CATALOG_DIR)) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
+        if available_panels:
+            panel_path = os.path.join(CATALOG_DIR, available_panels[0])
+        else:
+            raise HTTPException(status_code=404, detail="No se encontraron texturas de paneles en el catálogo")
+
     panel_bgr = cv2.imread(panel_path)
     if panel_bgr is None:
         raise HTTPException(status_code=500, detail="Error leyendo archivo de textura de panel")
@@ -564,11 +603,13 @@ def apply_decor(req: ApplyDecorRequest):
     wall_mask = None
     if req.mask_base64:
         wall_mask = decode_base64_mask(req.mask_base64, w, h)
-        if wall_mask is not None:
+        if wall_mask is not None and np.count_nonzero(wall_mask > 20) > 0:
             active_px = int(np.count_nonzero(wall_mask))
             print(f"[DecorWall AI] mask_base64 procesada con éxito: {active_px} píxeles marcados ({round(active_px/(h*w)*100, 2)}% del área)")
             session["active_mask"] = wall_mask
             session["is_custom_mask"] = True
+        else:
+            wall_mask = None
 
     if wall_mask is None and req.custom_box:
         # Modo selección de zona rectangular definida por el usuario
@@ -594,36 +635,60 @@ def apply_decor(req: ApplyDecorRequest):
         session["active_mask"] = wall_mask
         session["is_custom_mask"] = False
     elif wall_mask is None and session.get("active_mask") is not None:
-        # Usar la última máscara activa guardada por el usuario (Pincel/Borrador)
+        # Usar la última máscara activa guardada por el usuario (Pincel/Borrador/Pluma)
         wall_mask = session["active_mask"]
-    elif wall_mask is None and req.wall_id in session["wall_masks"]:
+    elif wall_mask is None and req.wall_id and session.get("wall_masks") and req.wall_id in session["wall_masks"]:
         wall_mask = session["wall_masks"][req.wall_id]
         session["active_mask"] = wall_mask
         session["is_custom_mask"] = False
+    elif wall_mask is None and session.get("wall_masks") and len(session["wall_masks"]) > 0:
+        first_wall_id = next(iter(session["wall_masks"]))
+        wall_mask = session["wall_masks"][first_wall_id]
+        session["active_mask"] = wall_mask
+        session["is_custom_mask"] = False
     elif wall_mask is None:
-        if session["wall_masks"]:
-            first_wall_id = next(iter(session["wall_masks"]))
-            wall_mask = session["wall_masks"][first_wall_id]
+        # Si no hay máscara ni pared previa, pero se enviaron los 4 puntos de perspectiva,
+        # crear automáticamente la máscara a partir de esos 4 puntos
+        if req.perspective_quad and len(req.perspective_quad) == 4:
+            wall_mask = np.zeros((h, w), dtype=np.uint8)
+            ordered_pts = blending_engine.order_quad_points(req.perspective_quad)
+            cv2.fillPoly(wall_mask, [np.int32(ordered_pts)], 255)
             session["active_mask"] = wall_mask
-            session["is_custom_mask"] = False
+            session["is_custom_mask"] = True
         else:
-            raise HTTPException(status_code=400, detail="No se encontró una pared válida para decorar")
+            raise HTTPException(
+                status_code=400,
+                detail="Por favor dibuja el área de la pared con la pluma (4 puntos) o selecciona una zona para aplicar el panel decorativo."
+            )
 
-    # Renderizar el panel decorativo con preservación de sombras, iluminación y muebles al frente
-    # Si la máscara fue dibujada/editada por el usuario, respetamos la soberanía de su selección
+    # Renderizar el panel decorativo con preservación de sombras e iluminación
     is_custom = session.get("is_custom_mask", False)
     fg_mask = None if is_custom else session.get("foreground_mask")
 
-    transformed_bgr = blending_engine.apply_panel_to_wall(
-        room_bgr=room_bgr,
-        panel_bgr=panel_bgr,
-        wall_mask=wall_mask,
-        foreground_mask=fg_mask,
-        scale=req.scale,
-        rotation=req.rotation,
-        shading_strength=req.shading_strength,
-        perspective_quad=req.perspective_quad
-    )
+    try:
+        transformed_bgr = blending_engine.apply_panel_to_wall(
+            room_bgr=room_bgr,
+            panel_bgr=panel_bgr,
+            wall_mask=wall_mask,
+            foreground_mask=fg_mask,
+            scale=req.scale,
+            rotation=req.rotation,
+            shading_strength=req.shading_strength,
+            perspective_quad=req.perspective_quad
+        )
+    except Exception as blend_err:
+        print(f"[DecorWall AI] Error durante el blending 3D: {blend_err}. Usando fallback ortogonal directo.")
+        transformed_bgr = blending_engine.apply_panel_to_wall(
+            room_bgr=room_bgr,
+            panel_bgr=panel_bgr,
+            wall_mask=wall_mask,
+            foreground_mask=None,
+            scale=req.scale,
+            rotation=req.rotation,
+            shading_strength=req.shading_strength,
+            perspective_quad=None
+        )
+
 
     # Guardar en cache para descarga o visualización
     result_filename = f"result_{req.image_id}_{req.wall_id}_{uuid.uuid4().hex[:6]}.jpg"
