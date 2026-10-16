@@ -72,13 +72,8 @@ class BlendingEngine:
         sums = sorted_pts[:, 0] + sorted_pts[:, 1]
         tl_idx = int(np.argmin(sums))
 
-        # Reordenar cíclicamente para que TL sea el índice 0
+        # Reordenar cíclicamente para que TL sea el índice 0 (orden natural en sentido horario)
         ordered = [sorted_pts[(tl_idx + i) % 4] for i in range(4)]
-
-        # Asegurar sentido horario: el punto TR (índice 1) debe estar a la derecha de BL (índice 3)
-        if ordered[1][0] < ordered[3][0]:
-            ordered[1], ordered[3] = ordered[3], ordered[1]
-
         return np.array(ordered, dtype=np.float32)
 
     @classmethod

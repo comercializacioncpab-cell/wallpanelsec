@@ -49,6 +49,7 @@ class ApplyDecorRequest(BaseModel):
     custom_polygon: Optional[list] = None
     mask_base64: Optional[str] = None
     perspective_quad: Optional[list] = None
+    image_base64: Optional[str] = None
 
 class EstimatePerspectiveRequest(BaseModel):
     image_id: str
@@ -160,8 +161,8 @@ def get_processed_image(filename: str):
         raise HTTPException(status_code=404, detail="Imagen no encontrada")
     return FileResponse(file_path)
 
-def process_and_store_image(image_bgr: np.ndarray, ext=".jpg") -> dict:
-    image_id = str(uuid.uuid4())
+def process_and_store_image(image_bgr: np.ndarray, ext=".jpg", custom_id=None) -> dict:
+    image_id = custom_id or str(uuid.uuid4())
     filename = f"{image_id}{ext}"
     saved_path = os.path.join(UPLOAD_DIR, filename)
     cv2.imwrite(saved_path, image_bgr)
@@ -251,7 +252,9 @@ def load_demo_room(demo_id: str):
     except Exception:
         image_bgr = cv2.imread(demo_path)
 
-    res = process_and_store_image(image_bgr)
+    base_demo_id = os.path.splitext(demo_id)[0]
+    custom_id = f"demo_{base_demo_id}"
+    res = process_and_store_image(image_bgr, ext=os.path.splitext(demo_id)[1], custom_id=custom_id)
     res["is_demo"] = True
 
     # Inyectar máscara de pared real pre-detectada si existe para este demo
@@ -547,7 +550,51 @@ def estimate_perspective(req: EstimatePerspectiveRequest):
 def apply_decor(req: ApplyDecorRequest):
     session = SESSION_STORE.get(req.image_id)
     
-    # Auto-rehidratación si la sesión se perdió por reinicio del contenedor/servidor
+    # 1. Rehidratar inmediatamente desde image_base64 enviada por el cliente si el servidor se reinició
+    if not session and req.image_base64:
+        try:
+            b64_str = req.image_base64
+            if "," in b64_str:
+                b64_str = b64_str.split(",")[1]
+            raw_bytes = base64.b64decode(b64_str)
+            nparr = np.frombuffer(raw_bytes, np.uint8)
+            img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img_bgr is not None:
+                detection_res = wall_detector.detect_walls_and_foreground(img_bgr)
+                wall_masks = {w["id"]: w["mask"] for w in detection_res["walls"]}
+                session = {
+                    "image_bgr": img_bgr,
+                    "filename": f"{req.image_id}.jpg",
+                    "walls_info": detection_res["walls"],
+                    "wall_masks": wall_masks,
+                    "foreground_mask": detection_res["foreground_mask"]
+                }
+                SESSION_STORE[req.image_id] = session
+                print(f"[DecorWall AI] Sesión {req.image_id} rehidratada con éxito desde image_base64 del cliente")
+        except Exception as e:
+            print(f"[DecorWall AI] Error rehidratando sesión desde image_base64: {e}")
+
+    # 2. Si es una demo room (ej: demo_living o demo_demo_1.jpg), buscar en DEMO_DIR
+    if not session:
+        demo_candidate = req.image_id.replace("demo_", "")
+        for ext in ["", ".jpg", ".png", ".jpeg", ".webp"]:
+            dpath = os.path.join(DEMO_DIR, f"{demo_candidate}{ext}")
+            if os.path.exists(dpath) and os.path.isfile(dpath):
+                img_bgr = cv2.imread(dpath)
+                if img_bgr is not None:
+                    detection_res = wall_detector.detect_walls_and_foreground(img_bgr)
+                    wall_masks = {w["id"]: w["mask"] for w in detection_res["walls"]}
+                    session = {
+                        "image_bgr": img_bgr,
+                        "filename": os.path.basename(dpath),
+                        "walls_info": detection_res["walls"],
+                        "wall_masks": wall_masks,
+                        "foreground_mask": detection_res["foreground_mask"]
+                    }
+                    SESSION_STORE[req.image_id] = session
+                    break
+
+    # 3. Buscar archivo en UPLOAD_DIR o DEMO_DIR
     if not session:
         matched_file = None
         for folder in [UPLOAD_DIR, DEMO_DIR]:

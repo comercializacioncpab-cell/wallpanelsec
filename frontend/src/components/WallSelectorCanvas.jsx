@@ -290,11 +290,6 @@ export default function WallSelectorCanvas({
       const sums = sortedPts.map((p) => p.x + p.y);
       const tlIdx = sums.indexOf(Math.min(...sums));
       quad = [0, 1, 2, 3].map((i) => sortedPts[(tlIdx + i) % 4]);
-      if (quad[1].x < quad[3].x) {
-        const tmp = quad[1];
-        quad[1] = quad[3];
-        quad[3] = tmp;
-      }
       setLocalPerspectiveQuad(quad);
       if (onPerspectiveQuadChange) onPerspectiveQuadChange(quad);
       if (setIs3DActive) setIs3DActive(true);
@@ -767,9 +762,25 @@ export default function WallSelectorCanvas({
   const handleApply = () => {
     const canvas = maskCanvasRef.current;
     if (!canvas) return;
+
+    if (toolMode === 'pen') {
+      if (polyPoints.length > 0 && polyPoints.length < 4) {
+        alert("Por favor toca los 4 puntos de tu pared para cerrar la selección antes de aplicar los cambios.");
+        return;
+      }
+      if (polyPoints.length >= 3) {
+        syncPolygonToCanvas(polyPoints);
+      }
+    }
+
+    let quad = null;
+    if (localPerspectiveQuad && localPerspectiveQuad.length === 4 && (toolMode === 'perspective' || (toolMode === 'pen' && polyPoints.length === 4))) {
+      quad = localPerspectiveQuad;
+    }
+
     const userMaskPng = getRigidMaskPng(canvas);
     if (onCustomMaskApply) {
-      onCustomMaskApply(userMaskPng, true);
+      onCustomMaskApply(userMaskPng, true, quad);
     }
   };
 

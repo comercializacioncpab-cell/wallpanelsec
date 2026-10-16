@@ -77,16 +77,29 @@ export default function App() {
     setSelectedCustomBox(null);
     setSelectedCustomMask(null);
     try {
+      const readDataUrlPromise = new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      });
+
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await fetch('/api/upload-room', {
-        method: 'POST',
-        body: formData,
-      });
+      const [res, localDataUrl] = await Promise.all([
+        fetch('/api/upload-room', {
+          method: 'POST',
+          body: formData,
+        }),
+        readDataUrlPromise
+      ]);
 
       if (!res.ok) throw new Error('Error al procesar la foto');
       const data = await res.json();
+      if (localDataUrl) {
+        data.localDataUrl = localDataUrl;
+      }
       setupNewImage(data);
     } catch (err) {
       setErrorMessage(err.message || 'Error conectando con el servicio de IA');
@@ -184,6 +197,10 @@ export default function App() {
 
       if (currentIs3D && currentPerspectiveQuad && currentPerspectiveQuad.length === 4) {
         payload.perspective_quad = currentPerspectiveQuad;
+      }
+
+      if (activeImage?.localDataUrl) {
+        payload.image_base64 = activeImage.localDataUrl;
       }
 
       const res = await fetch('/api/apply-decor', {
