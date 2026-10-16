@@ -1,5 +1,6 @@
 import React from 'react';
 import { Sliders, RotateCw, SunMedium, Sparkles, ZoomIn, Box, Compass } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export default function TextureControls({
   scale,
@@ -15,6 +16,8 @@ export default function TextureControls({
   isProcessing,
   canApply
 }) {
+  const { t } = useLanguage();
+
   return (
     <div className="bg-slate-900/80 rounded-2xl border border-slate-800 p-4 flex flex-col gap-4 w-full shadow-xl">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -22,7 +25,7 @@ export default function TextureControls({
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200">
             <ZoomIn className="w-4 h-4 text-amber-400" />
-            <span>Tamaño del Patrón:</span>
+            <span>{t('controls.patternSize')}</span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -48,7 +51,7 @@ export default function TextureControls({
                 scale === 0.12 ? 'bg-amber-500 text-slate-950 font-bold border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
               }`}
             >
-              Ultra Fino
+              {t('controls.ultraFine')}
             </button>
             <button
               onClick={() => setScale(0.25)}
@@ -56,7 +59,7 @@ export default function TextureControls({
                 scale === 0.25 ? 'bg-amber-500 text-slate-950 font-bold border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
               }`}
             >
-              Fino
+              {t('controls.fine')}
             </button>
             <button
               onClick={() => setScale(0.6)}
@@ -64,7 +67,7 @@ export default function TextureControls({
                 scale === 0.6 ? 'bg-amber-500 text-slate-950 font-bold border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
               }`}
             >
-              Medio
+              {t('controls.medium')}
             </button>
             <button
               onClick={() => setScale(1.0)}
@@ -72,20 +75,20 @@ export default function TextureControls({
                 scale === 1.0 ? 'bg-amber-500 text-slate-950 font-bold border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
               }`}
             >
-              Estándar
+              {t('controls.standard')}
             </button>
           </div>
         </div>
 
         {/* Control de Orientación */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-200">Orientación:</span>
+          <span className="text-xs font-bold text-slate-200">{t('controls.orientation')}</span>
           <button
             onClick={() => setRotation(rotation === 0 ? 90 : 0)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition-all cursor-pointer"
           >
             <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-            <span>{rotation === 0 ? 'Vertical' : 'Horizontal'}</span>
+            <span>{rotation === 0 ? t('controls.vertical') : t('controls.horizontal')}</span>
           </button>
         </div>
 
@@ -100,20 +103,20 @@ export default function TextureControls({
                 ? 'bg-sky-500 text-slate-950 shadow-md scale-[1.02]'
                 : 'bg-slate-800 text-slate-300 hover:text-white border border-slate-700'
             }`}
-            title="Activar homografía de perspectiva 3D para paredes fotografiadas en ángulo"
+            title={t('controls.perspectiveTitle')}
           >
             <Box className="w-3.5 h-3.5" />
-            <span>Perspectiva 3D: {is3DActive ? 'Activada' : 'Plana 2D'}</span>
+            <span>{t('controls.perspective3D')} {is3DActive ? t('controls.perspectiveOn') : t('controls.perspectiveOff')}</span>
           </button>
 
           {is3DActive && onOpenPerspectiveTool && (
             <button
               onClick={onOpenPerspectiveTool}
               className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded-lg border border-sky-500/30 text-xs font-semibold transition-all cursor-pointer"
-              title="Ajustar los 4 pines de perspectiva en el lienzo"
+              title={t('controls.adjustPinsTitle')}
             >
               <Compass className="w-3.5 h-3.5" />
-              <span>Ajustar Pines</span>
+              <span>{t('controls.adjustPins')}</span>
             </button>
           )}
         </div>
@@ -122,7 +125,7 @@ export default function TextureControls({
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200">
             <SunMedium className="w-4 h-4 text-amber-400" />
-            <span>Fusión de Luz:</span>
+            <span>{t('controls.lightFusion')}</span>
           </div>
           <input
             type="range"
@@ -145,7 +148,7 @@ export default function TextureControls({
           className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-lg shadow-amber-500/25 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed uppercase tracking-wide"
         >
           <Sparkles className={`w-4 h-4 ${isProcessing ? 'animate-spin' : ''}`} />
-          <span>{isProcessing ? 'Procesando...' : 'Actualizar Textura'}</span>
+          <span>{isProcessing ? t('controls.processingBtn') : t('controls.updateTexture')}</span>
         </button>
       </div>
     </div>

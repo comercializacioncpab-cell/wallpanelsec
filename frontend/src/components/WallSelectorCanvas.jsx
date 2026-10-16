@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useLanguage } from '../i18n/LanguageContext';
 import {
   PenTool,
   Paintbrush,
@@ -40,6 +41,7 @@ export default function WallSelectorCanvas({
   dimensions = { width: 1200, height: 800 },
   orientation = 'horizontal'
 }) {
+  const { t } = useLanguage();
   // Herramientas: 'pen' (Pluma Poligonal) | 'brush' | 'eraser' | 'smart_erase' | 'magic_wand' | 'perspective' | 'box_select' | 'auto_wall'
   const [toolMode, setToolMode] = useState(initialToolMode || 'pen');
   const [penMode, setPenMode] = useState('add'); // 'add' | 'subtract'
@@ -464,7 +466,7 @@ export default function WallSelectorCanvas({
       }
     } catch (err) {
       console.error('Error auto-subtracting furniture:', err);
-      alert('Error detectando muebles: ' + err.message);
+      alert(t('canvas.alertFurnitureError') + err.message);
     } finally {
       setIsSubtractingFurniture(false);
     }
@@ -765,7 +767,7 @@ export default function WallSelectorCanvas({
 
     if (toolMode === 'pen') {
       if (polyPoints.length > 0 && polyPoints.length < 4) {
-        alert("Por favor toca los 4 puntos de tu pared para cerrar la selección antes de aplicar los cambios.");
+        alert(t('canvas.alertNeed4Points'));
         return;
       }
       if (polyPoints.length >= 3) {
@@ -787,10 +789,10 @@ export default function WallSelectorCanvas({
   const activeBackgroundUrl = bgMode === 'transformed' && transformedUrl ? transformedUrl : imageUrl;
 
   const pinLabels = [
-    { title: 'Techo Izq (TL)', color: '#38bdf8' },
-    { title: 'Techo Der (TR)', color: '#38bdf8' },
-    { title: 'Suelo Der (BR)', color: '#38bdf8' },
-    { title: 'Suelo Izq (BL)', color: '#38bdf8' }
+    { title: t('canvas.pinTL'), color: '#38bdf8' },
+    { title: t('canvas.pinTR'), color: '#38bdf8' },
+    { title: t('canvas.pinBR'), color: '#38bdf8' },
+    { title: t('canvas.pinBL'), color: '#38bdf8' }
   ];
 
   return (
@@ -810,10 +812,10 @@ export default function WallSelectorCanvas({
                 ? 'bg-amber-500 text-slate-950 shadow-md scale-[1.02]'
                 : 'text-slate-300 hover:text-white'
             }`}
-            title="Pluma Poligonal: Clic a clic en las esquinas de la pared"
+            title={t('canvas.toolPenTitle')}
           >
             <PenTool className="w-3.5 h-3.5" />
-            <span>Pluma Poligonal</span>
+            <span>{t('canvas.toolPen')}</span>
           </button>
 
           {/* Herramienta 2: Ajuste de Perspectiva 3D */}
@@ -827,10 +829,10 @@ export default function WallSelectorCanvas({
                 ? 'bg-sky-500 text-slate-950 shadow-md scale-[1.02]'
                 : 'text-slate-300 hover:text-white'
             }`}
-            title="Pines de Perspectiva 3D: Arrastra las 4 esquinas para alinear con las líneas de fuga"
+            title={t('canvas.tool3DTitle')}
           >
             <Compass className="w-3.5 h-3.5" />
-            <span>Pines 3D (Perspectiva)</span>
+            <span>{t('canvas.tool3D')}</span>
           </button>
 
           {/* Herramienta 3: Pincel Manual */}
@@ -841,10 +843,10 @@ export default function WallSelectorCanvas({
                 ? 'bg-amber-500 text-slate-950 shadow-md scale-[1.02]'
                 : 'text-slate-300 hover:text-white'
             }`}
-            title="Pintar para sumar pared a mano alzada"
+            title={t('canvas.toolBrushTitle')}
           >
             <Paintbrush className="w-3.5 h-3.5" />
-            <span>Pincel (+ Sumar)</span>
+            <span>{t('canvas.toolBrush')}</span>
           </button>
 
           {/* Herramienta 4: Borrador Manual */}
@@ -855,10 +857,10 @@ export default function WallSelectorCanvas({
                 ? 'bg-red-500 text-white shadow-md scale-[1.02]'
                 : 'text-slate-300 hover:text-white'
             }`}
-            title="Borrar para restar muebles a mano alzada"
+            title={t('canvas.toolEraserTitle')}
           >
             <Eraser className="w-3.5 h-3.5" />
-            <span>Borrador (- Restar)</span>
+            <span>{t('canvas.toolEraser')}</span>
           </button>
 
           {/* Herramienta 5: Clic Restar Objeto (GrabCut) */}
@@ -869,10 +871,10 @@ export default function WallSelectorCanvas({
                 ? 'bg-rose-500 text-white shadow-md scale-[1.02]'
                 : 'text-slate-300 hover:text-white'
             }`}
-            title="Restar Objeto al Clic: Haz 1 clic sobre un cuadro, lámpara o cojín para recortarlo"
+            title={t('canvas.toolSmartEraseTitle')}
           >
             <Target className="w-3.5 h-3.5" />
-            <span>Restar Objeto</span>
+            <span>{t('canvas.toolSmartErase')}</span>
           </button>
 
           {/* Herramienta 6: Varita Mágica */}
@@ -883,10 +885,10 @@ export default function WallSelectorCanvas({
                 ? 'bg-amber-500 text-slate-950 shadow-md scale-[1.02]'
                 : 'text-slate-300 hover:text-white'
             }`}
-            title="Varita Mágica: Clic en la pared para rellenar respetando los filos"
+            title={t('canvas.toolMagicWandTitle')}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Varita Mágica</span>
+            <span>{t('canvas.toolMagicWand')}</span>
           </button>
 
           {/* Herramienta 7: Recuadro */}
@@ -897,10 +899,10 @@ export default function WallSelectorCanvas({
                 ? 'bg-amber-500 text-slate-950 shadow-md scale-[1.02]'
                 : 'text-slate-300 hover:text-white'
             }`}
-            title="Arrastrar un recuadro de zona"
+            title={t('canvas.toolBoxTitle')}
           >
             <Crop className="w-3.5 h-3.5" />
-            <span>Recuadro</span>
+            <span>{t('canvas.toolBox')}</span>
           </button>
         </div>
 
@@ -911,16 +913,16 @@ export default function WallSelectorCanvas({
             <div className="flex flex-wrap items-center gap-2 bg-slate-950/80 px-3 py-1.5 rounded-xl border border-sky-500/30">
               <span className="text-sky-300 font-semibold flex items-center gap-1">
                 <Box className="w-3.5 h-3.5" />
-                <span>4 Pines de Fuga Activos</span>
+                <span>{t('canvas.pins3DActive')}</span>
               </span>
 
               <button
                 onClick={handleEstimatePerspective}
                 className="flex items-center gap-1 px-2.5 py-1 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg cursor-pointer transition-all shadow-md"
-                title="Ajustar automáticamente los 4 pines a la pared actual"
+                title={t('canvas.autoDetectTitle')}
               >
                 <Sparkles className="w-3 h-3 stroke-[2.5]" />
-                <span>Auto-detectar Fuga</span>
+                <span>{t('canvas.autoDetectVanishing')}</span>
               </button>
 
               <button
@@ -930,10 +932,10 @@ export default function WallSelectorCanvas({
                   if (onPerspectiveQuadChange) onPerspectiveQuadChange(def);
                 }}
                 className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer"
-                title="Restablecer cuadrilátero estándar"
+                title={t('canvas.resetTitle')}
               >
                 <RotateCcw className="w-3 h-3" />
-                <span>Restablecer</span>
+                <span>{t('canvas.reset')}</span>
               </button>
             </div>
           )}
@@ -949,7 +951,7 @@ export default function WallSelectorCanvas({
                   }`}
                 >
                   <Plus className="w-3 h-3" />
-                  <span>+ Sumar Pared</span>
+                  <span>{t('canvas.addWall')}</span>
                 </button>
                 <button
                   onClick={() => setPenMode('subtract')}
@@ -958,22 +960,22 @@ export default function WallSelectorCanvas({
                   }`}
                 >
                   <Minus className="w-3 h-3" />
-                  <span>- Restar Ventana / Mueble</span>
+                  <span>{t('canvas.subtractCut')}</span>
                 </button>
               </div>
 
               <span className="font-mono text-xs text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                {polyPoints.length} {polyPoints.length === 1 ? 'punto' : 'puntos'}
+                {polyPoints.length} {polyPoints.length === 1 ? t('canvas.pointSingular') : t('canvas.pointsPlural')}
               </span>
 
               {polyPoints.length >= 4 ? (
                 <span className="text-emerald-400 font-semibold text-xs flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
                   <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>Recuadro Cerrado Activo ({polyPoints.length} esquinas)</span>
+                  <span>{t('canvas.boxClosedActive')} ({polyPoints.length} {t('canvas.corners')})</span>
                 </span>
               ) : (
                 <span className="text-amber-300/80 text-xs italic">
-                  {4 - polyPoints.length} {4 - polyPoints.length === 1 ? 'esquina para cerrar' : 'esquinas para cerrar'}
+                  {4 - polyPoints.length} {4 - polyPoints.length === 1 ? t('canvas.cornersToCloseSingle') : t('canvas.cornersToClosePlural')}
                 </span>
               )}
 
@@ -982,10 +984,10 @@ export default function WallSelectorCanvas({
                   <button
                     onClick={() => setPolyPoints((prev) => prev.slice(0, -1))}
                     className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer"
-                    title="Deshacer el último punto colocado"
+                    title={t('canvas.undoTitle')}
                   >
                     <Undo2 className="w-3 h-3" />
-                    <span>Deshacer</span>
+                    <span>{t('canvas.undo')}</span>
                   </button>
                   <button
                     onClick={() => {
@@ -993,10 +995,10 @@ export default function WallSelectorCanvas({
                       setIsHoveringFirstPoint(false);
                     }}
                     className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-300 rounded-lg cursor-pointer"
-                    title="Cancelar trazo actual"
+                    title={t('canvas.cancelTitle')}
                   >
                     <X className="w-3 h-3" />
-                    <span>Cancelar</span>
+                    <span>{t('canvas.cancel')}</span>
                   </button>
                 </>
               )}
@@ -1013,7 +1015,7 @@ export default function WallSelectorCanvas({
                     wandMode === 'add' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  + Sumar
+                  {t('canvas.wandAdd')}
                 </button>
                 <button
                   onClick={() => setWandMode('subtract')}
@@ -1021,12 +1023,12 @@ export default function WallSelectorCanvas({
                     wandMode === 'subtract' ? 'bg-red-500 text-white' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  - Restar
+                  {t('canvas.wandSubtract')}
                 </button>
               </div>
 
               <div className="flex items-center gap-1.5">
-                <span className="text-slate-400">Tolerancia:</span>
+                <span className="text-slate-400">{t('canvas.tolerance')}</span>
                 <input
                   type="range"
                   min="5"
@@ -1041,7 +1043,7 @@ export default function WallSelectorCanvas({
               {isWandProcessing && (
                 <span className="text-amber-400 font-medium animate-pulse flex items-center gap-1">
                   <Sparkles className="w-3 h-3 animate-spin" />
-                  <span>Procesando...</span>
+                  <span>{t('canvas.processing')}</span>
                 </span>
               )}
             </div>
@@ -1050,7 +1052,7 @@ export default function WallSelectorCanvas({
           {/* Control de Grosor del Pincel / Borrador */}
           {(toolMode === 'brush' || toolMode === 'eraser') && (
             <div className="flex items-center gap-2 bg-slate-950/60 px-3 py-1.5 rounded-xl border border-slate-800">
-              <span className="text-slate-400 font-medium">Tamaño:</span>
+              <span className="text-slate-400 font-medium">{t('canvas.brushSize')}</span>
               <input
                 type="range"
                 min="5"
@@ -1067,7 +1069,7 @@ export default function WallSelectorCanvas({
           {toolMode === 'smart_erase' && (
             <div className="flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/30 px-3 py-1.5 rounded-xl text-rose-300">
               <Target className={`w-3.5 h-3.5 ${isSmartErasing ? 'animate-spin' : ''}`} />
-              <span>{isSmartErasing ? 'Aislando objeto...' : 'Haz clic sobre un mueble u objeto para recortarlo'}</span>
+              <span>{isSmartErasing ? t('canvas.smartEraseIsolating') : t('canvas.smartEraseHint')}</span>
             </div>
           )}
 
@@ -1076,10 +1078,10 @@ export default function WallSelectorCanvas({
             onClick={handleAutoSubtractFurniture}
             disabled={isSubtractingFurniture}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
-            title="La IA detecta automáticamente los sofás, lámparas, cuadros y plantas que estén frente a la pared y los resta con precisión"
+            title={t('canvas.autoSubtractTitle')}
           >
             <Sparkles className={`w-3.5 h-3.5 ${isSubtractingFurniture ? 'animate-spin' : ''}`} />
-            <span>{isSubtractingFurniture ? 'Detectando muebles...' : '🪄 Restar Muebles (IA)'}</span>
+            <span>{isSubtractingFurniture ? t('canvas.autoSubtractDetecting') : t('canvas.autoSubtractBtn')}</span>
           </button>
         </div>
 
@@ -1089,20 +1091,20 @@ export default function WallSelectorCanvas({
             <button
               onClick={() => setBgMode(bgMode === 'original' ? 'transformed' : 'original')}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 text-xs font-semibold cursor-pointer"
-              title="Alternar entre ver foto original o foto con panel aplicado"
+              title={t('canvas.viewToggleTitle')}
             >
               <Eye className="w-3.5 h-3.5 text-amber-400" />
-              <span>{bgMode === 'original' ? 'Ver con Panel' : 'Ver Foto Original'}</span>
+              <span>{bgMode === 'original' ? t('canvas.viewWithPanel') : t('canvas.viewOriginal')}</span>
             </button>
           )}
 
           <button
             onClick={handleClear}
             className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-red-500/20 text-slate-300 hover:text-red-400 rounded-lg border border-slate-700 transition-colors cursor-pointer"
-            title="Limpiar máscara para comenzar desde cero"
+            title={t('canvas.clearTitle')}
           >
             <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Limpiar</span>
+            <span className="hidden sm:inline">{t('canvas.clear')}</span>
           </button>
 
           <button
@@ -1110,7 +1112,7 @@ export default function WallSelectorCanvas({
             className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black rounded-xl shadow-lg shadow-emerald-500/25 transition-all cursor-pointer active:scale-95 text-xs tracking-wide uppercase"
           >
             <Check className="w-4 h-4 stroke-[3]" />
-            <span>Aplicar Cambios</span>
+            <span>{t('canvas.applyChanges')}</span>
           </button>
         </div>
       </div>
@@ -1121,15 +1123,11 @@ export default function WallSelectorCanvas({
           <div className="flex items-center gap-2">
             <Smartphone className="w-4 h-4 text-amber-400 shrink-0" />
             <span>
-              {polyPoints.length < 4 ? (
-                <>Toca <strong>4 esquinas</strong> de tu pared: se cerrará automáticamente al colocar el 4to punto.</>
-              ) : (
-                <>¡Recuadro cerrado! Toca y mantén presionado <strong>cualquier círculo</strong> para corregirlo, o toca <strong>cualquier línea (+)</strong> y arrastra para estirar una nueva esquina.</>
-              )}
+              {polyPoints.length < 4 ? t('canvas.penInstructionsIncomplete') : t('canvas.penInstructionsComplete')}
             </span>
           </div>
           <span className="text-[11px] text-amber-300/80 bg-slate-900/80 px-2.5 py-0.5 rounded-lg border border-amber-500/20 font-semibold">
-            {polyPoints.length >= 4 ? `✓ ${polyPoints.length} vértices activos` : `${4 - polyPoints.length} para cerrar`}
+            {polyPoints.length >= 4 ? `✓ ${polyPoints.length} ${t('canvas.activeVertices')}` : `${4 - polyPoints.length} ${t('canvas.pointsToClose')}`}
           </span>
         </div>
       )}
@@ -1139,12 +1137,12 @@ export default function WallSelectorCanvas({
         {/* Indicadores sutiles de scroll en los márgenes laterales para celular */}
         <div className="flex sm:hidden absolute left-1 top-1/2 -translate-y-1/2 flex-col items-center gap-0.5 text-[9px] text-slate-500/80 pointer-events-none select-none font-semibold">
           <span>▲</span>
-          <span className="[writing-mode:vertical-lr] tracking-widest uppercase">Scroll</span>
+          <span className="[writing-mode:vertical-lr] tracking-widest uppercase">{t('canvas.scrollLabel')}</span>
           <span>▼</span>
         </div>
         <div className="flex sm:hidden absolute right-1 top-1/2 -translate-y-1/2 flex-col items-center gap-0.5 text-[9px] text-slate-500/80 pointer-events-none select-none font-semibold">
           <span>▲</span>
-          <span className="[writing-mode:vertical-lr] tracking-widest uppercase">Scroll</span>
+          <span className="[writing-mode:vertical-lr] tracking-widest uppercase">{t('canvas.scrollLabel')}</span>
           <span>▼</span>
         </div>
 

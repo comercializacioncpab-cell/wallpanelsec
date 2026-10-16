@@ -5,9 +5,11 @@ import WallSelectorCanvas from './components/WallSelectorCanvas';
 import CatalogSidebar from './components/CatalogSidebar';
 import TextureControls from './components/TextureControls';
 import BeforeAfterSlider from './components/BeforeAfterSlider';
+import { useLanguage } from './i18n/LanguageContext';
 import { Sparkles, SlidersHorizontal, Layers, CheckCircle2, AlertTriangle, Crop, Smartphone, Monitor, RotateCw } from 'lucide-react';
 
 export default function App() {
+  const { t } = useLanguage();
   // Estado de catálogo y demos
   const [panels, setPanels] = useState([]);
   const [demoRooms, setDemoRooms] = useState([]);
@@ -406,7 +408,7 @@ export default function App() {
                     }`}
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>Live Antes y Después</span>
+                    <span>{t('tabs.compare')}</span>
                   </button>
 
                   <button
@@ -418,14 +420,14 @@ export default function App() {
                     }`}
                   >
                     <Crop className="w-3.5 h-3.5" />
-                    <span>Seleccionar Parte / Pared</span>
+                    <span>{t('tabs.selectWall')}</span>
                   </button>
                 </div>
 
                 <div className="flex items-center gap-3 text-xs text-slate-400 pr-2">
                   <span className="flex items-center gap-1.5 text-amber-300 font-medium">
                     {isVertical ? <Smartphone className="w-3.5 h-3.5 text-amber-400" /> : <Monitor className="w-3.5 h-3.5 text-amber-400" />}
-                    <span>{isVertical ? 'Foto Vertical' : 'Foto Horizontal'}</span>
+                    <span>{isVertical ? t('tabs.verticalPhoto') : t('tabs.horizontalPhoto')}</span>
                   </span>
 
                   {/* Botón para rotar la foto 90° */}
@@ -433,16 +435,16 @@ export default function App() {
                     onClick={handleRotateRoom}
                     disabled={isProcessing}
                     className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 transition-all cursor-pointer font-medium disabled:opacity-50"
-                    title="Girar foto 90° en sentido horario si está de lado o invertida"
+                    title={t('tabs.rotate90Title')}
                   >
                     <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Girar 90°</span>
+                    <span>{t('tabs.rotate90')}</span>
                   </button>
 
                   <span className="hidden sm:inline text-slate-600">|</span>
                   <div className="hidden sm:flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                    <span>Panel: <strong className="text-slate-200">{currentPanelObj?.title || 'Ninguno'}</strong></span>
+                    <span>{t('tabs.panelSelected')} <strong className="text-slate-200">{currentPanelObj?.title || t('tabs.none')}</strong></span>
                   </div>
                 </div>
               </div>
@@ -545,7 +547,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950 px-6 py-4 text-center text-xs text-slate-500">
-        Wallpanelsec — Visualizador fotorrealista inteligente de paneles y revestimientos decorativos.
+        {t('tabs.footer')}
       </footer>
     </div>
   );

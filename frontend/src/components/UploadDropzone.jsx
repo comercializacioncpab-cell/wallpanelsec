@@ -1,7 +1,9 @@
 import React, { useRef, useState } from 'react';
 import { UploadCloud, Camera, Image as ImageIcon, Sparkles, ShieldCheck, Sun, CheckCircle, Smartphone } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export default function UploadDropzone({ onUploadFile, onLoadDemo, demoRooms = [], isUploading }) {
+  const { t } = useLanguage();
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -29,14 +31,13 @@ export default function UploadDropzone({ onUploadFile, onLoadDemo, demoRooms = [
       <div className="text-center space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 text-xs font-semibold border border-amber-500/20">
           <Sparkles className="w-3.5 h-3.5" />
-          Transformación de Interiores con IA
+          {t('upload.badge')}
         </div>
         <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-          Visualiza Paneles Decorativos en tu Espacio Real
+          {t('upload.title')}
         </h2>
         <p className="text-slate-400 text-sm sm:text-base max-w-2xl mx-auto">
-          Toma una foto con tu celular o sube una imagen de tu sala o dormitorio. Detectamos paredes,
-          permitimos retocar con pincel/borrador y proyectamos el panel con iluminación y sombras reales.
+          {t('upload.desc')}
         </p>
       </div>
 
@@ -68,7 +69,7 @@ export default function UploadDropzone({ onUploadFile, onLoadDemo, demoRooms = [
           className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-base shadow-xl shadow-amber-500/25 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
         >
           <Camera className="w-5 h-5 stroke-[2.5]" />
-          <span>Tomar Foto con la Cámara</span>
+          <span>{t('upload.takePhoto')}</span>
         </button>
 
         {/* Botón Subir desde Galería */}
@@ -78,7 +79,7 @@ export default function UploadDropzone({ onUploadFile, onLoadDemo, demoRooms = [
           className="w-full flex items-center justify-center gap-2.5 px-6 py-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-100 font-semibold text-base border border-slate-700 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
         >
           <ImageIcon className="w-5 h-5 text-amber-400" />
-          <span>Subir desde Galería</span>
+          <span>{t('upload.uploadGallery')}</span>
         </button>
       </div>
 
@@ -100,17 +101,17 @@ export default function UploadDropzone({ onUploadFile, onLoadDemo, demoRooms = [
 
         <div className="space-y-1">
           <p className="text-sm font-semibold text-white">
-            {isUploading ? 'Procesando imagen con IA...' : 'O arrastra una foto aquí desde tu computadora'}
+            {isUploading ? t('upload.processing') : t('upload.dragDrop')}
           </p>
           <p className="text-xs text-slate-500">
-            JPG, PNG o WEBP (se adapta automáticamente si es vertical u horizontal)
+            {t('upload.formats')}
           </p>
         </div>
 
         {isUploading && (
           <div className="flex items-center gap-2 text-amber-400 text-xs font-semibold animate-pulse">
             <Sparkles className="w-4 h-4 animate-spin" />
-            <span>Detectando paredes y analizando iluminación...</span>
+            <span>{t('upload.analyzing')}</span>
           </div>
         )}
       </div>
@@ -119,7 +120,7 @@ export default function UploadDropzone({ onUploadFile, onLoadDemo, demoRooms = [
       <div className="w-full space-y-3">
         <div className="flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
           <span className="h-px w-12 bg-slate-800"></span>
-          <span>O prueba con nuestras habitaciones de muestra hiperrealistas</span>
+          <span>{t('upload.demoRoomsDivider')}</span>
           <span className="h-px w-12 bg-slate-800"></span>
         </div>
 
@@ -145,7 +146,7 @@ export default function UploadDropzone({ onUploadFile, onLoadDemo, demoRooms = [
                 </h4>
                 <p className="text-[10px] text-slate-400 flex items-center gap-1 m-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                  Pared lista (1 clic)
+                  {t('upload.demoBadge')}
                 </p>
               </div>
             </button>
@@ -158,24 +159,24 @@ export default function UploadDropzone({ onUploadFile, onLoadDemo, demoRooms = [
         <div className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/30 border border-slate-800/40">
           <Camera className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
-            <span className="font-semibold text-slate-200">Desde tu Celular</span>
-            <p className="text-slate-400">Abre la cámara y toma la foto directamente en el lugar del cliente.</p>
+            <span className="font-semibold text-slate-200">{t('upload.feat3Title')}</span>
+            <p className="text-slate-400">{t('upload.feat3Desc')}</p>
           </div>
         </div>
 
         <div className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/30 border border-slate-800/40">
           <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
-            <span className="font-semibold text-slate-200">Pincel y Borrador</span>
-            <p className="text-slate-400">Suma o resta zonas con el dedo o mouse para precisión milimétrica.</p>
+            <span className="font-semibold text-slate-200">{t('upload.feat1Title')}</span>
+            <p className="text-slate-400">{t('upload.feat1Desc')}</p>
           </div>
         </div>
 
         <div className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/30 border border-slate-800/40">
           <Sun className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
-            <span className="font-semibold text-slate-200">Iluminación Real</span>
-            <p className="text-slate-400">Mantiene sombras y reflejos naturales de la habitación.</p>
+            <span className="font-semibold text-slate-200">{t('upload.feat2Title')}</span>
+            <p className="text-slate-400">{t('upload.feat2Desc')}</p>
           </div>
         </div>
       </div>

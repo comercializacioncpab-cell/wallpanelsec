@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Eye, EyeOff, MoveHorizontal, Smartphone, Monitor, Sparkles, Layers, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export default function BeforeAfterSlider({
   originalSrc,
@@ -10,6 +11,7 @@ export default function BeforeAfterSlider({
   orientation = 'horizontal',
   onGoToEdit
 }) {
+  const { t } = useLanguage();
   const [sliderPosition, setSliderPosition] = useState(30); // Mostrar 70% del panel por defecto al llegar
   const [isDragging, setIsDragging] = useState(false);
   
@@ -180,8 +182,8 @@ export default function BeforeAfterSlider({
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 px-1">
         <div className="flex items-center gap-2 font-medium">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="text-slate-200 font-semibold">Comparador Fotorrealista:</span>
-          <span className="hidden sm:inline">Desliza la barra para ver el cambio o pellizca con 2 dedos para zoom</span>
+          <span className="text-slate-200 font-semibold">{t('slider.photorealisticComparator')}</span>
+          <span className="hidden sm:inline">{t('slider.sliderHint')}</span>
         </div>
 
         {/* Acceso rápido a estados 100% */}
@@ -192,7 +194,7 @@ export default function BeforeAfterSlider({
               sliderPosition <= 5 ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
             }`}
           >
-            Ver Solo con Panel
+            {t('slider.viewOnlyPanel')}
           </button>
           <button
             onClick={() => setSliderPosition(50)}
@@ -200,7 +202,7 @@ export default function BeforeAfterSlider({
               sliderPosition > 40 && sliderPosition < 60 ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
             }`}
           >
-            Mitad y Mitad
+            {t('slider.halfAndHalf')}
           </button>
           <button
             onClick={() => setSliderPosition(100)}
@@ -208,7 +210,7 @@ export default function BeforeAfterSlider({
               sliderPosition >= 95 ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
             }`}
           >
-            Ver Solo Original
+            {t('slider.viewOnlyOriginal')}
           </button>
 
           {onGoToEdit && (
@@ -217,7 +219,7 @@ export default function BeforeAfterSlider({
               className="flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-amber-400 rounded-lg border border-amber-500/30 text-xs font-bold transition-all cursor-pointer ml-1"
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Retocar Selección</span>
+              <span>{t('slider.refineSelection')}</span>
             </button>
           )}
         </div>
@@ -250,7 +252,7 @@ export default function BeforeAfterSlider({
             {/* Capa de imagen transformada (DESPUÉS: abajo completa) */}
             <img
               src={transformedSrc}
-              alt="Después con panel decorativo"
+              alt={t('slider.after')}
               className="absolute inset-0 w-full h-full block select-none object-contain"
             />
 
@@ -263,7 +265,7 @@ export default function BeforeAfterSlider({
             >
               <img
                 src={originalSrc}
-                alt="Antes original"
+                alt={t('slider.before')}
                 className="absolute inset-0 w-full h-full block select-none object-contain"
               />
             </div>
@@ -290,13 +292,13 @@ export default function BeforeAfterSlider({
           {/* Etiquetas fijas en esquinas (permanecen visibles sin salir de la pantalla al hacer zoom) */}
           <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-md text-white text-[11px] font-black tracking-wider uppercase border border-white/20 shadow-lg pointer-events-none flex items-center gap-1.5 z-20">
             <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-            Original (Antes)
+            {t('slider.originalBefore')}
           </div>
 
           {sliderPosition < 85 && (
             <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-amber-500/90 backdrop-blur-md text-slate-950 text-[11px] font-black tracking-wider uppercase border border-amber-400/50 shadow-lg pointer-events-none flex items-center gap-1.5 z-20">
               <span className="w-2 h-2 rounded-full bg-slate-950"></span>
-              {panelTitle || 'Con Panel'}
+              {panelTitle || t('slider.withPanelTag')}
             </div>
           )}
 
@@ -309,7 +311,7 @@ export default function BeforeAfterSlider({
               }}
               disabled={zoom <= 1}
               className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white cursor-pointer transition-all active:scale-95"
-              title="Alejar zoom"
+              title={t('slider.zoomOut')}
             >
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
@@ -320,7 +322,7 @@ export default function BeforeAfterSlider({
                 handleResetZoom();
               }}
               className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 font-mono font-bold cursor-pointer transition-all text-[11px]"
-              title="Restablecer zoom a 1x"
+              title={t('slider.resetZoom')}
             >
               {zoom.toFixed(1)}x
             </button>
@@ -332,7 +334,7 @@ export default function BeforeAfterSlider({
               }}
               disabled={zoom >= 4.5}
               className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white cursor-pointer transition-all active:scale-95"
-              title="Acercar zoom"
+              title={t('slider.zoomIn')}
             >
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
@@ -344,7 +346,7 @@ export default function BeforeAfterSlider({
                   handleResetZoom();
                 }}
                 className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 cursor-pointer transition-all active:scale-95"
-                title="Restablecer vista normal"
+                title={t('slider.resetNormalView')}
               >
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
@@ -355,7 +357,7 @@ export default function BeforeAfterSlider({
           {zoom > 1.05 && (
             <div className="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg bg-slate-950/85 backdrop-blur-md border border-amber-500/30 text-[11px] text-amber-300 font-medium z-20 pointer-events-none flex items-center gap-1.5 shadow-lg">
               <Sparkles className="w-3 h-3 text-amber-400 animate-pulse" />
-              <span>Arrastra con 2 dedos para explorar</span>
+              <span>{t('slider.zoomExploration')}</span>
             </div>
           )}
 
@@ -364,7 +366,7 @@ export default function BeforeAfterSlider({
             <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-30">
               <div className="w-12 h-12 rounded-full border-4 border-amber-500 border-t-transparent animate-spin"></div>
               <p className="text-white font-medium text-sm animate-pulse">
-                Calculando iluminación y sombras fotorrealistas...
+                {t('slider.calculating')}
               </p>
             </div>
           )}
@@ -372,9 +374,9 @@ export default function BeforeAfterSlider({
       </div>
 
       <div className="flex items-center justify-between text-xs text-slate-500 px-2">
-        <span>⬅ Foto original</span>
-        <span className="font-semibold text-slate-400">Preservando sombras e iluminación real</span>
-        <span>Con diseño aplicado ➡</span>
+        <span>{t('slider.origPhoto')}</span>
+        <span className="font-semibold text-slate-400">{t('slider.shadowNotice')}</span>
+        <span>{t('slider.withPanel')}</span>
       </div>
     </div>
   );

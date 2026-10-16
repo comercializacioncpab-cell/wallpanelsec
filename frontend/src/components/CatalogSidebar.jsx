@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Upload, Check, Sparkles, Filter, PlusCircle, AlertCircle } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export default function CatalogSidebar({
   panels = [],
@@ -8,6 +9,7 @@ export default function CatalogSidebar({
   onUploadNewPanel,
   isUploadingPanel
 }) {
+  const { t } = useLanguage();
   const [activeCategory, setActiveCategory] = useState('Todos');
   const fileInputRef = useRef(null);
 
@@ -26,6 +28,10 @@ export default function CatalogSidebar({
     }
   };
 
+  const getTranslatedCategory = (cat) => {
+    return t(`catalog.categories.${cat}`, cat);
+  };
+
   return (
     <aside className="w-full lg:w-96 flex flex-col bg-slate-900/60 rounded-2xl border border-slate-800 p-4 gap-4 h-full">
       {/* Cabecera del catálogo */}
@@ -33,9 +39,9 @@ export default function CatalogSidebar({
         <div>
           <h2 className="text-base font-bold text-white flex items-center gap-2 m-0">
             <Sparkles className="w-4 h-4 text-amber-400" />
-            Catálogo de Paneles
+            {t('catalog.title')}
           </h2>
-          <p className="text-xs text-slate-400 m-0">Selecciona el diseño para transformar la pared</p>
+          <p className="text-xs text-slate-400 m-0">{t('catalog.subtitle')}</p>
         </div>
 
         {/* Botón para subir nuevos diseños */}
@@ -51,10 +57,10 @@ export default function CatalogSidebar({
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploadingPanel}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 border border-amber-500/30 rounded-xl text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
-            title="Subir nuevo diseño a la carpeta de paneles"
+            title={t('catalog.addTitle')}
           >
             <PlusCircle className="w-3.5 h-3.5" />
-            <span>{isUploadingPanel ? 'Subiendo...' : '+ Añadir'}</span>
+            <span>{isUploadingPanel ? t('catalog.uploading') : t('catalog.addBtn')}</span>
           </button>
         </div>
       </div>
@@ -71,7 +77,7 @@ export default function CatalogSidebar({
                 : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
             }`}
           >
-            {cat}
+            {getTranslatedCategory(cat)}
           </button>
         ))}
       </div>
@@ -104,7 +110,7 @@ export default function CatalogSidebar({
                   </div>
                 )}
                 <span className="absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded bg-black/75 backdrop-blur-xs text-[10px] font-medium text-slate-300">
-                  {panel.category}
+                  {getTranslatedCategory(panel.category)}
                 </span>
               </div>
 
@@ -120,7 +126,7 @@ export default function CatalogSidebar({
 
         {filteredPanels.length === 0 && (
           <div className="col-span-2 py-8 text-center text-slate-500 text-xs">
-            No hay paneles en esta categoría. Puedes subir uno nuevo con el botón de arriba.
+            {t('catalog.emptyCategory')}
           </div>
         )}
       </div>
@@ -129,7 +135,7 @@ export default function CatalogSidebar({
       <div className="mt-auto p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 text-xs text-slate-400 flex items-start gap-2">
         <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
         <span>
-          Cualquier imagen agregada a la carpeta de diseños estará disponible al instante para decorar.
+          {t('catalog.notice')}
         </span>
       </div>
     </aside>
