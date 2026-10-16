@@ -250,8 +250,8 @@ export default function WallSelectorCanvas({
     }
   }, [onCustomMaskApply]);
 
-  // Completar y rellenar la Pluma Poligonal (+ calibración de perspectiva automática si tiene 4 puntos)
-  const completePolygon = useCallback((points = polyPoints, mode = penMode) => {
+  // Sincronizar y rellenar la Pluma Poligonal en tiempo real sin eliminar los puntos activos
+  const syncPolygonToCanvas = useCallback((points = polyPoints, mode = penMode) => {
     if (!points || points.length < 3) return;
     const canvas = maskCanvasRef.current;
     if (!canvas) return;
@@ -264,6 +264,7 @@ export default function WallSelectorCanvas({
       ctx.globalCompositeOperation = 'destination-out';
       ctx.fillStyle = 'rgba(0,0,0,1)';
     } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.globalCompositeOperation = 'source-over';
       ctx.fillStyle = 'rgba(245, 158, 11, 0.7)';
     }
@@ -292,8 +293,6 @@ export default function WallSelectorCanvas({
       if (setIs3DActive) setIs3DActive(true);
     }
 
-    setPolyPoints([]);
-    setIsHoveringFirstPoint(false);
     setHasDrawnMask(true);
 
     // Guardar y aplicar la máscara inmediatamente en el fondo
@@ -302,6 +301,8 @@ export default function WallSelectorCanvas({
       onCustomMaskApply(userMaskPng, false);
     }
   }, [polyPoints, penMode, onPerspectiveQuadChange, setIs3DActive, onCustomMaskApply]);
+
+  const completePolygon = syncPolygonToCanvas;
 
   // Manejo de atajos de teclado para la pluma (Enter, Escape, Backspace)
   useEffect(() => {
@@ -467,6 +468,20 @@ export default function WallSelectorCanvas({
     }
   };
 
+  // Cálculo de distancia de un punto a un segmento de línea (para insertar puntos tocando las aristas)
+  const getDistToSegment = (p, v, w) => {
+    const l2 = (v.x - w.x) * (v.x - w.x) + (v.y - w.y) * (v.y - w.y);
+    if (l2 === 0) return { dist: Math.hypot(p.x - v.x, p.y - v.y), proj: v };
+    let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    const projX = v.x + t * (w.x - v.x);
+    const projY = v.y + t * (w.y - v.y);
+    return {
+      dist: Math.hypot(p.x - projX, p.y - projY),
+      proj: { x: Math.round(projX), y: Math.round(projY) }
+    };
+  };
+
   const handlePointerDown = (e) => {
     // Si es un gesto multitáctil (zoom/pinch con dos dedos), permitir comportamiento nativo del navegador
     if (e.touches && e.touches.length > 1) {
@@ -488,29 +503,66 @@ export default function WallSelectorCanvas({
     }
 
     if (toolMode === 'pen') {
-      // 1. Verificar si el usuario tocó un punto EXISTENTE para arrastrarlo o corregirlo
-      const hitRadius = Math.max(42, dimensions.width * 0.055);
+      // 1. Si ya hay puntos, verificar si tocó un VÉRTICE / CÍRCULO existente para arrastrarlo o corregirlo
+      const vertexHitRadius = Math.max(42, dimensions.width * 0.055);
       let foundIndex = -1;
       let minDistance = Infinity;
 
       for (let i = 0; i < polyPoints.length; i++) {
         const p = polyPoints[i];
         const dist = Math.hypot(pt.x - p.x, pt.y - p.y);
-        if (dist <= hitRadius && dist < minDistance) {
+        if (dist <= vertexHitRadius && dist < minDistance) {
           minDistance = dist;
           foundIndex = i;
         }
       }
 
       if (foundIndex !== -1) {
-        // Se tocó un punto existente: activar modo de arrastre/edición
+        // Se tocó un punto existente: activar inmediatamente arrastre y corrección
         setActivePolyIndex(foundIndex);
+        setIsDraggingPolyPoint(true);
+        pointerDownPosRef.current = pt;
+        return;
+      }
+
+      // 2. Si el polígono ya está cerrado (tiene 3 o más puntos), verificar si tocó una LÍNEA / ARISTA
+      if (polyPoints.length >= 3) {
+        const edgeHitRadius = Math.max(45, dimensions.width * 0.06);
+        let bestEdge = -1;
+        let minEdgeDist = Infinity;
+        const n = polyPoints.length;
+
+        for (let i = 0; i < n; i++) {
+          const v = polyPoints[i];
+          const w = polyPoints[(i + 1) % n];
+          const { dist } = getDistToSegment(pt, v, w);
+          if (dist <= edgeHitRadius && dist < minEdgeDist) {
+            minEdgeDist = dist;
+            bestEdge = i;
+          }
+        }
+
+        if (bestEdge !== -1) {
+          // Tocó una línea: insertar nuevo punto y empezar a arrastrarlo inmediatamente al mantener presionado
+          const newPt = { x: Math.round(pt.x), y: Math.round(pt.y) };
+          const nextPts = [...polyPoints];
+          nextPts.splice(bestEdge + 1, 0, newPt);
+          setPolyPoints(nextPts);
+          setActivePolyIndex(bestEdge + 1);
+          setIsDraggingPolyPoint(true);
+          pointerDownPosRef.current = pt;
+          return;
+        }
+
+        // Si tocó espacio vacío fuera de las líneas y vértices cuando ya está cerrado:
+        // No agregar puntos por error; permitir gesto de scroll o visualización
+        setActivePolyIndex(null);
         setIsDraggingPolyPoint(false);
         pointerDownPosRef.current = pt;
         return;
       }
 
-      // 2. Se tocó el lienzo vacío: guardar coordenadas de inicio para diferenciar toque de scroll
+      // 3. Si aún no está cerrado (< 3 puntos): guardar coordenadas de inicio para agregar punto 1, 2 o 3 al soltar
       setActivePolyIndex(null);
       setIsDraggingPolyPoint(false);
       pointerDownPosRef.current = pt;
@@ -554,7 +606,7 @@ export default function WallSelectorCanvas({
 
     // Modo Pluma Poligonal
     if (toolMode === 'pen') {
-      // Si se está arrastrando/corrigiendo un punto existente
+      // Si se está arrastrando/corrigiendo un punto existente o un nuevo punto creado en una línea
       if (activePolyIndex !== null) {
         setIsDraggingPolyPoint(true);
         setPolyPoints((prev) => {
@@ -565,16 +617,6 @@ export default function WallSelectorCanvas({
           return next;
         });
         return;
-      }
-
-      // Detección de cercanía al primer punto para cerrar el polígono
-      if (polyPoints.length >= 3) {
-        const p0 = polyPoints[0];
-        const hitRadius = Math.max(42, dimensions.width * 0.055);
-        const dist = Math.hypot(pt.x - p0.x, pt.y - p0.y);
-        setIsHoveringFirstPoint(dist <= hitRadius);
-      } else if (isHoveringFirstPoint) {
-        setIsHoveringFirstPoint(false);
       }
       return;
     }
@@ -607,36 +649,32 @@ export default function WallSelectorCanvas({
     if (toolMode === 'pen') {
       const startPt = pointerDownPosRef.current;
       const wasDragging = isDraggingPolyPoint;
-      const touchedIdx = activePolyIndex;
 
       setActivePolyIndex(null);
       setIsDraggingPolyPoint(false);
       pointerDownPosRef.current = null;
 
-      // Si se estaba arrastrando un punto, ya quedó en su nueva posición corregida
+      // Si se estaba arrastrando un punto (existente o recién insertado en la línea),
+      // ya quedó en su nueva posición corregida -> sincronizar canvas inmediatamente
       if (wasDragging) {
+        if (polyPoints.length >= 3) {
+          syncPolygonToCanvas(polyPoints);
+        }
         return;
       }
 
-      // Si tocó el primer punto sin arrastrarlo y ya hay 3 o más puntos, cerrar el polígono
-      if (touchedIdx === 0 && polyPoints.length >= 3) {
-        completePolygon();
-        return;
-      }
-
-      // Si tocó otro punto existente sin arrastrarlo, no hacer nada (no duplicar puntos)
-      if (touchedIdx !== null) {
-        return;
-      }
-
-      // Si tocó espacio vacío, verificar que haya sido un toque intencional y no un intento de scroll
-      if (startPt) {
+      // Si aún no tenía 3 puntos y fue un toque limpio, agregar punto 1, 2 o 3
+      if (polyPoints.length < 3 && startPt) {
         const movedDist = Math.hypot(pt.x - startPt.x, pt.y - startPt.y);
         // Umbral de tolerancia: si el dedo se movió más de 30px o 2.5% de la foto, era un deslizamiento de scroll
         const scrollThreshold = Math.max(30, dimensions.width * 0.025);
         if (movedDist < scrollThreshold) {
-          // Toque limpio intencional: agregar nuevo punto
-          setPolyPoints((prev) => [...prev, pt]);
+          const next = [...polyPoints, { x: Math.round(pt.x), y: Math.round(pt.y) }];
+          setPolyPoints(next);
+          // ¡Al colocar el 3er punto se cierra automáticamente el recuadro!
+          if (next.length === 3) {
+            syncPolygonToCanvas(next);
+          }
         }
       }
       return;
@@ -891,15 +929,15 @@ export default function WallSelectorCanvas({
                 {polyPoints.length} {polyPoints.length === 1 ? 'punto' : 'puntos'}
               </span>
 
-              {polyPoints.length >= 3 && (
-                <button
-                  onClick={() => completePolygon()}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg cursor-pointer transition-all shadow-md animate-pulse"
-                  title="Cerrar y rellenar el polígono trazado (o presiona Enter)"
-                >
-                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                  <span>Cerrar y Rellenar</span>
-                </button>
+              {polyPoints.length >= 3 ? (
+                <span className="text-emerald-400 font-semibold text-xs flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Área Cerrada Activa</span>
+                </span>
+              ) : (
+                <span className="text-amber-300/80 text-xs italic">
+                  {3 - polyPoints.length} {3 - polyPoints.length === 1 ? 'punto para cerrar' : 'puntos para cerrar'}
+                </span>
               )}
 
               {polyPoints.length > 0 && (
@@ -1040,17 +1078,21 @@ export default function WallSelectorCanvas({
         </div>
       </div>
 
-      {/* Banner de inicio limpio si la foto no tiene selección aún */}
-      {!hasDrawnMask && polyPoints.length === 0 && (
-        <div className="bg-amber-500/10 border border-amber-500/30 px-4 py-2.5 rounded-xl text-xs text-amber-200 flex items-center justify-between gap-3">
+      {/* Banner de ayuda intuitivo para Pluma Poligonal */}
+      {toolMode === 'pen' && (
+        <div className="bg-amber-500/10 border border-amber-500/30 px-3.5 py-2 rounded-xl text-xs text-amber-200 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <PenTool className="w-4 h-4 text-amber-400 shrink-0" />
+            <Smartphone className="w-4 h-4 text-amber-400 shrink-0" />
             <span>
-              <strong>Foto lista sin selección previa:</strong> Haz clic en la foto con la <strong>Pluma Poligonal</strong> en las 4 esquinas de tu pared (techo y piso) para trazar el área y calibrar la perspectiva 3D automáticamente.
+              {polyPoints.length < 3 ? (
+                <>Toca <strong>3 puntos</strong> en la pared: se cerrará automáticamente al colocar el 3er punto.</>
+              ) : (
+                <>¡Área activa! Toca y mantén presionado <strong>cualquier círculo</strong> para corregirlo, o toca <strong>cualquier línea (+)</strong> y arrastra para estirar una nueva esquina.</>
+              )}
             </span>
           </div>
-          <span className="text-[11px] text-slate-400 shrink-0 hidden sm:inline">
-            Doble clic o clic en el 1er punto para cerrar
+          <span className="text-[11px] text-amber-300/80 bg-slate-900/80 px-2.5 py-0.5 rounded-lg border border-amber-500/20 font-semibold">
+            {polyPoints.length >= 3 ? `✓ ${polyPoints.length} vértices activos` : `${3 - polyPoints.length} para cerrar`}
           </span>
         </div>
       )}
@@ -1104,18 +1146,31 @@ export default function WallSelectorCanvas({
             preserveAspectRatio="none"
             className="absolute inset-0 w-full h-full pointer-events-none z-20"
           >
-            {/* Trazado activo de la Pluma Poligonal */}
+            {/* Trazado activo de la Pluma Poligonal (se cierra automáticamente al tener 3 puntos) */}
             {polyPoints.length > 0 && (
               <g>
-                <polyline
-                  points={polyPoints.map((p) => `${p.x},${p.y}`).join(' ')}
-                  fill="none"
-                  stroke={penMode === 'subtract' ? '#ef4444' : '#f59e0b'}
-                  strokeWidth="3.5"
-                  strokeDasharray="6 3"
-                />
+                {/* Si tiene 3 o más puntos, mostrar como polígono cerrado con relleno sutil de pared */}
+                {polyPoints.length >= 3 ? (
+                  <polygon
+                    points={polyPoints.map((p) => `${p.x},${p.y}`).join(' ')}
+                    fill={penMode === 'subtract' ? 'rgba(239, 68, 68, 0.22)' : 'rgba(245, 158, 11, 0.25)'}
+                    stroke={penMode === 'subtract' ? '#ef4444' : '#f59e0b'}
+                    strokeWidth="3.5"
+                    strokeDasharray="6 3"
+                    className="select-none pointer-events-none"
+                  />
+                ) : (
+                  <polyline
+                    points={polyPoints.map((p) => `${p.x},${p.y}`).join(' ')}
+                    fill="none"
+                    stroke={penMode === 'subtract' ? '#ef4444' : '#f59e0b'}
+                    strokeWidth="3.5"
+                    strokeDasharray="6 3"
+                  />
+                )}
 
-                {cursorCoords && (
+                {/* Si está abierto (< 3 puntos) y el cursor se mueve, mostrar guía hacia el siguiente punto */}
+                {polyPoints.length < 3 && cursorCoords && (
                   <line
                     x1={polyPoints[polyPoints.length - 1].x}
                     y1={polyPoints[polyPoints.length - 1].y}
@@ -1126,6 +1181,45 @@ export default function WallSelectorCanvas({
                     strokeDasharray="4 4"
                   />
                 )}
+
+                {/* Aristas interactivas activas: al tocar cualquier línea se inserta un punto y se arrastra */}
+                {polyPoints.length >= 3 && polyPoints.map((p1, idx) => {
+                  const p2 = polyPoints[(idx + 1) % polyPoints.length];
+                  const midX = Math.round((p1.x + p2.x) / 2);
+                  const midY = Math.round((p1.y + p2.y) / 2);
+                  const plusRadius = Math.max(12, Math.round(dimensions.width * 0.014));
+
+                  return (
+                    <g key={`edge-ctrl-${idx}`} className="select-none pointer-events-none">
+                      {/* Botón visual '+' centrado en cada línea para indicar que se puede agregar un punto */}
+                      <circle
+                        cx={midX}
+                        cy={midY}
+                        r={plusRadius + 1}
+                        fill="rgba(0,0,0,0.5)"
+                      />
+                      <circle
+                        cx={midX}
+                        cy={midY}
+                        r={plusRadius}
+                        fill="#0284c7"
+                        stroke="#ffffff"
+                        strokeWidth="2"
+                      />
+                      <text
+                        x={midX}
+                        y={midY + Math.round(plusRadius * 0.4)}
+                        textAnchor="middle"
+                        fill="#ffffff"
+                        fontSize={Math.max(12, Math.round(plusRadius * 1.15))}
+                        fontWeight="900"
+                        className="select-none"
+                      >
+                        +
+                      </text>
+                    </g>
+                  );
+                })}
 
                 {polyPoints.map((pt, idx) => {
                   const isFirst = idx === 0;
@@ -1225,28 +1319,6 @@ export default function WallSelectorCanvas({
                   );
                 })}
 
-                {isHoveringFirstPoint && polyPoints.length >= 3 && (
-                  <g>
-                    <circle
-                      cx={polyPoints[0].x}
-                      cy={polyPoints[0].y}
-                      r={Math.max(34, Math.round(dimensions.width * 0.038))}
-                      fill="rgba(16, 185, 129, 0.35)"
-                      stroke="#10b981"
-                      strokeWidth="3.5"
-                    />
-                    <text
-                      x={polyPoints[0].x + Math.max(26, Math.round(dimensions.width * 0.03))}
-                      y={polyPoints[0].y - 10}
-                      fill="#10b981"
-                      fontSize={Math.max(16, Math.round(dimensions.width * 0.018))}
-                      fontWeight="bold"
-                      className="drop-shadow-md select-none"
-                    >
-                      ✓ Toca para cerrar área
-                    </text>
-                  </g>
-                )}
               </g>
             )}
 
