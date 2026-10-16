@@ -16,7 +16,9 @@ import {
   Plus,
   Minus,
   Box,
-  Compass
+  Compass,
+  Smartphone,
+  Move
 } from 'lucide-react';
 
 export default function WallSelectorCanvas({
@@ -74,6 +76,9 @@ export default function WallSelectorCanvas({
   );
 
   const [activePinIndex, setActivePinIndex] = useState(null); // 0, 1, 2, 3
+  const [activePolyIndex, setActivePolyIndex] = useState(null); // Índice del vértice poligonal seleccionado/arrastrado
+  const [isDraggingPolyPoint, setIsDraggingPolyPoint] = useState(false);
+  const pointerDownPosRef = useRef(null);
 
   const containerRef = useRef(null);
   const maskCanvasRef = useRef(null);
@@ -463,15 +468,18 @@ export default function WallSelectorCanvas({
   };
 
   const handlePointerDown = (e) => {
+    // Si es un gesto multitáctil (zoom/pinch con dos dedos), permitir comportamiento nativo del navegador
+    if (e.touches && e.touches.length > 1) {
+      return;
+    }
     e.preventDefault();
     const pt = getNativeCoords(e);
 
     // Los pines de perspectiva 3D solo se pueden arrastrar en modo 'perspective'
     if (toolMode === 'perspective') {
+      const pinHitDist = Math.max(45, dimensions.width * 0.06);
       const pinIndex = localPerspectiveQuad.findIndex((p) => {
-        const dx = (pt.x - p.x) / dimensions.width;
-        const dy = (pt.y - p.y) / dimensions.height;
-        return Math.sqrt(dx * dx + dy * dy) < 0.045;
+        return Math.hypot(pt.x - p.x, pt.y - p.y) < pinHitDist;
       });
       if (pinIndex !== -1) {
         setActivePinIndex(pinIndex);
@@ -480,11 +488,32 @@ export default function WallSelectorCanvas({
     }
 
     if (toolMode === 'pen') {
-      if (polyPoints.length >= 3 && isHoveringFirstPoint) {
-        completePolygon();
-      } else {
-        setPolyPoints((prev) => [...prev, pt]);
+      // 1. Verificar si el usuario tocó un punto EXISTENTE para arrastrarlo o corregirlo
+      const hitRadius = Math.max(42, dimensions.width * 0.055);
+      let foundIndex = -1;
+      let minDistance = Infinity;
+
+      for (let i = 0; i < polyPoints.length; i++) {
+        const p = polyPoints[i];
+        const dist = Math.hypot(pt.x - p.x, pt.y - p.y);
+        if (dist <= hitRadius && dist < minDistance) {
+          minDistance = dist;
+          foundIndex = i;
+        }
       }
+
+      if (foundIndex !== -1) {
+        // Se tocó un punto existente: activar modo de arrastre/edición
+        setActivePolyIndex(foundIndex);
+        setIsDraggingPolyPoint(false);
+        pointerDownPosRef.current = pt;
+        return;
+      }
+
+      // 2. Se tocó el lienzo vacío: guardar coordenadas de inicio para diferenciar toque de scroll
+      setActivePolyIndex(null);
+      setIsDraggingPolyPoint(false);
+      pointerDownPosRef.current = pt;
       return;
     }
 
@@ -523,14 +552,31 @@ export default function WallSelectorCanvas({
       return;
     }
 
-    if (toolMode === 'pen' && polyPoints.length >= 3) {
-      const p0 = polyPoints[0];
-      const dx = (pt.x - p0.x) / dimensions.width;
-      const dy = (pt.y - p0.y) / dimensions.height;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      setIsHoveringFirstPoint(dist < 0.035);
-    } else if (isHoveringFirstPoint) {
-      setIsHoveringFirstPoint(false);
+    // Modo Pluma Poligonal
+    if (toolMode === 'pen') {
+      // Si se está arrastrando/corrigiendo un punto existente
+      if (activePolyIndex !== null) {
+        setIsDraggingPolyPoint(true);
+        setPolyPoints((prev) => {
+          const next = [...prev];
+          if (next[activePolyIndex]) {
+            next[activePolyIndex] = { x: Math.round(pt.x), y: Math.round(pt.y) };
+          }
+          return next;
+        });
+        return;
+      }
+
+      // Detección de cercanía al primer punto para cerrar el polígono
+      if (polyPoints.length >= 3) {
+        const p0 = polyPoints[0];
+        const hitRadius = Math.max(42, dimensions.width * 0.055);
+        const dist = Math.hypot(pt.x - p0.x, pt.y - p0.y);
+        setIsHoveringFirstPoint(dist <= hitRadius);
+      } else if (isHoveringFirstPoint) {
+        setIsHoveringFirstPoint(false);
+      }
+      return;
     }
 
     if (!isDrawing) return;
@@ -549,11 +595,50 @@ export default function WallSelectorCanvas({
     }
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e) => {
+    const pt = getNativeCoords(e);
+
     if (activePinIndex !== null) {
       setActivePinIndex(null);
-      // Al soltar el pin de perspectiva, sincronizar automáticamente la máscara del lienzo
       syncQuadToCanvas(localPerspectiveQuad);
+      return;
+    }
+
+    if (toolMode === 'pen') {
+      const startPt = pointerDownPosRef.current;
+      const wasDragging = isDraggingPolyPoint;
+      const touchedIdx = activePolyIndex;
+
+      setActivePolyIndex(null);
+      setIsDraggingPolyPoint(false);
+      pointerDownPosRef.current = null;
+
+      // Si se estaba arrastrando un punto, ya quedó en su nueva posición corregida
+      if (wasDragging) {
+        return;
+      }
+
+      // Si tocó el primer punto sin arrastrarlo y ya hay 3 o más puntos, cerrar el polígono
+      if (touchedIdx === 0 && polyPoints.length >= 3) {
+        completePolygon();
+        return;
+      }
+
+      // Si tocó otro punto existente sin arrastrarlo, no hacer nada (no duplicar puntos)
+      if (touchedIdx !== null) {
+        return;
+      }
+
+      // Si tocó espacio vacío, verificar que haya sido un toque intencional y no un intento de scroll
+      if (startPt) {
+        const movedDist = Math.hypot(pt.x - startPt.x, pt.y - startPt.y);
+        // Umbral de tolerancia: si el dedo se movió más de 30px o 2.5% de la foto, era un deslizamiento de scroll
+        const scrollThreshold = Math.max(30, dimensions.width * 0.025);
+        if (movedDist < scrollThreshold) {
+          // Toque limpio intencional: agregar nuevo punto
+          setPolyPoints((prev) => [...prev, pt]);
+        }
+      }
       return;
     }
 
@@ -579,6 +664,11 @@ export default function WallSelectorCanvas({
     if (activePinIndex !== null) {
       setActivePinIndex(null);
       syncQuadToCanvas(localPerspectiveQuad);
+    }
+    if (toolMode === 'pen') {
+      setActivePolyIndex(null);
+      setIsDraggingPolyPoint(false);
+      pointerDownPosRef.current = null;
     }
     setIsDrawing(false);
     lastPointRef.current = null;
@@ -965,18 +1055,30 @@ export default function WallSelectorCanvas({
         </div>
       )}
 
-      {/* Contenedor interactivo sincronizado sin deformación */}
-      <div className="flex justify-center w-full bg-slate-950/40 p-2 rounded-2xl">
+      {/* Contenedor interactivo con márgenes laterales seguros para scroll en celular */}
+      <div className="flex items-center justify-center w-full bg-slate-950/40 px-3 sm:px-6 py-2.5 rounded-2xl relative">
+        {/* Indicadores sutiles de scroll en los márgenes laterales para celular */}
+        <div className="flex sm:hidden absolute left-1 top-1/2 -translate-y-1/2 flex-col items-center gap-0.5 text-[9px] text-slate-500/80 pointer-events-none select-none font-semibold">
+          <span>▲</span>
+          <span className="[writing-mode:vertical-lr] tracking-widest uppercase">Scroll</span>
+          <span>▼</span>
+        </div>
+        <div className="flex sm:hidden absolute right-1 top-1/2 -translate-y-1/2 flex-col items-center gap-0.5 text-[9px] text-slate-500/80 pointer-events-none select-none font-semibold">
+          <span>▲</span>
+          <span className="[writing-mode:vertical-lr] tracking-widest uppercase">Scroll</span>
+          <span>▼</span>
+        </div>
+
         <div
           ref={containerRef}
           style={{
             aspectRatio: `${dimensions.width} / ${dimensions.height}`,
-            maxHeight: isVertical ? 'min(75vh, 720px)' : 'min(66vh, 600px)',
-            maxWidth: `min(100%, calc(${isVertical ? 'min(75vh, 720px)' : 'min(66vh, 600px)'} * ${dimensions.width} / ${dimensions.height}))`,
-            width: '100%',
+            maxHeight: isVertical ? 'min(72vh, 680px)' : 'min(62vh, 580px)',
+            maxWidth: `min(86%, calc(${isVertical ? 'min(72vh, 680px)' : 'min(62vh, 580px)'} * ${dimensions.width} / ${dimensions.height}))`,
+            width: '86%',
             margin: '0 auto'
           }}
-          className="relative bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl select-none touch-none shrink-0"
+          className="relative bg-slate-900 rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl select-none touch-none shrink-0 sm:w-full sm:max-w-full"
         >
           {/* Foto de fondo con relación de aspecto nativa exacta */}
           <img
@@ -1025,49 +1127,123 @@ export default function WallSelectorCanvas({
                   />
                 )}
 
-                {polyPoints.map((pt, idx) => (
-                  <g key={idx}>
-                    <circle
-                      cx={pt.x}
-                      cy={pt.y}
-                      r={idx === 0 ? 8 : 5}
-                      fill={idx === 0 ? (penMode === 'subtract' ? '#ef4444' : '#10b981') : '#ffffff'}
-                      stroke={penMode === 'subtract' ? '#991b1b' : '#b45309'}
-                      strokeWidth="2.5"
-                    />
-                    {idx === 0 && (
+                {polyPoints.map((pt, idx) => {
+                  const isFirst = idx === 0;
+                  const isBeingDragged = activePolyIndex === idx;
+                  const visualRadius = isFirst
+                    ? Math.max(22, Math.round(dimensions.width * 0.026))
+                    : Math.max(18, Math.round(dimensions.width * 0.022));
+                  const touchRadius = Math.max(42, Math.round(dimensions.width * 0.055));
+                  const innerDotRadius = Math.max(6, Math.round(dimensions.width * 0.0075));
+                  const badgeFontSize = Math.max(14, Math.round(dimensions.width * 0.017));
+
+                  return (
+                    <g key={idx} className="select-none" style={{ pointerEvents: 'auto' }}>
+                      {/* Zona táctil invisible amplia para dedos en pantalla táctil */}
                       <circle
                         cx={pt.x}
                         cy={pt.y}
-                        r="14"
-                        fill="none"
-                        stroke={penMode === 'subtract' ? '#ef4444' : '#10b981'}
-                        strokeWidth="2"
-                        className="animate-ping opacity-75"
+                        r={touchRadius}
+                        fill="transparent"
+                        className="cursor-move"
                       />
-                    )}
-                  </g>
-                ))}
 
-                {isHoveringFirstPoint && (
+                      {/* Sombra de relieve */}
+                      <circle
+                        cx={pt.x}
+                        cy={pt.y + 3}
+                        r={visualRadius + 2}
+                        fill="rgba(0,0,0,0.5)"
+                      />
+
+                      {/* Halo activo al tocar o arrastrar */}
+                      {isBeingDragged && (
+                        <circle
+                          cx={pt.x}
+                          cy={pt.y}
+                          r={visualRadius * 1.55}
+                          fill="rgba(245, 158, 11, 0.35)"
+                          stroke="#f59e0b"
+                          strokeWidth="3.5"
+                          strokeDasharray="6 4"
+                        />
+                      )}
+
+                      {/* Círculo visual principal de alta visibilidad */}
+                      <circle
+                        cx={pt.x}
+                        cy={pt.y}
+                        r={visualRadius}
+                        fill={
+                          isFirst
+                            ? penMode === 'subtract' ? '#ef4444' : '#10b981'
+                            : isBeingDragged ? '#f59e0b' : '#0f172a'
+                        }
+                        stroke={
+                          isFirst
+                            ? '#ffffff'
+                            : isBeingDragged ? '#ffffff' : '#f59e0b'
+                        }
+                        strokeWidth={isBeingDragged ? '4' : '3'}
+                        className="transition-transform duration-75"
+                      />
+
+                      {/* Punto central de precisión blanco */}
+                      <circle
+                        cx={pt.x}
+                        cy={pt.y}
+                        r={innerDotRadius}
+                        fill="#ffffff"
+                      />
+
+                      {/* Número identificador del vértice (1, 2, 3...) */}
+                      <text
+                        x={pt.x}
+                        y={pt.y - visualRadius - 8}
+                        textAnchor="middle"
+                        fill="#ffffff"
+                        fontSize={badgeFontSize}
+                        fontWeight="900"
+                        className="select-none pointer-events-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]"
+                      >
+                        {idx + 1}
+                      </text>
+
+                      {/* Animación de pulso en el primer punto para cerrar el polígono */}
+                      {isFirst && polyPoints.length >= 3 && (
+                        <circle
+                          cx={pt.x}
+                          cy={pt.y}
+                          r={visualRadius + 14}
+                          fill="none"
+                          stroke={penMode === 'subtract' ? '#ef4444' : '#10b981'}
+                          strokeWidth="3"
+                          className="animate-ping opacity-75"
+                        />
+                      )}
+                    </g>
+                  );
+                })}
+
+                {isHoveringFirstPoint && polyPoints.length >= 3 && (
                   <g>
                     <circle
                       cx={polyPoints[0].x}
                       cy={polyPoints[0].y}
-                      r="16"
+                      r={Math.max(34, Math.round(dimensions.width * 0.038))}
                       fill="rgba(16, 185, 129, 0.35)"
                       stroke="#10b981"
-                      strokeWidth="3"
+                      strokeWidth="3.5"
                     />
                     <text
-                      x={polyPoints[0].x + 18}
-                      y={polyPoints[0].y - 8}
+                      x={polyPoints[0].x + Math.max(26, Math.round(dimensions.width * 0.03))}
+                      y={polyPoints[0].y - 10}
                       fill="#10b981"
-                      fontSize="16"
+                      fontSize={Math.max(16, Math.round(dimensions.width * 0.018))}
                       fontWeight="bold"
                       className="drop-shadow-md select-none"
                     >
-                      ✓ Clic para cerrar área
+                      ✓ Toca para cerrar área
                     </text>
                   </g>
                 )}

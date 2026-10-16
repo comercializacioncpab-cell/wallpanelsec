@@ -105,20 +105,20 @@ export default function BeforeAfterSlider({
         </div>
       </div>
 
-      {/* Contenedor con clip-path exacto sin deformación */}
-      <div className="flex justify-center w-full bg-slate-950/40 p-2 rounded-2xl">
+      {/* Contenedor con clip-path exacto sin deformación y márgenes seguros para scroll en celular */}
+      <div className="flex items-center justify-center w-full bg-slate-950/40 px-3 sm:px-6 py-2.5 rounded-2xl relative">
         <div
           ref={containerRef}
           onMouseDown={handleMouseDown}
           onTouchStart={handleTouchStart}
           style={{
             aspectRatio: `${dimensions.width} / ${dimensions.height}`,
-            maxHeight: isVertical ? 'min(75vh, 720px)' : 'min(66vh, 600px)',
-            maxWidth: `min(100%, calc(${isVertical ? 'min(75vh, 720px)' : 'min(66vh, 600px)'} * ${dimensions.width} / ${dimensions.height}))`,
-            width: '100%',
+            maxHeight: isVertical ? 'min(72vh, 680px)' : 'min(62vh, 580px)',
+            maxWidth: `min(86%, calc(${isVertical ? 'min(72vh, 680px)' : 'min(62vh, 580px)'} * ${dimensions.width} / ${dimensions.height}))`,
+            width: '86%',
             margin: '0 auto'
           }}
-          className="relative bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl select-none cursor-ew-resize group touch-none shrink-0"
+          className="relative bg-slate-900 rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl select-none cursor-ew-resize group touch-none shrink-0 sm:w-full sm:max-w-full"
         >
           {/* Capa de imagen transformada (DESPUÉS: abajo completa) */}
           <img
