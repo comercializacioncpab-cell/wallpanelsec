@@ -79,12 +79,37 @@ export default function App() {
     setSelectedCustomBox(null);
     setSelectedCustomMask(null);
     try {
-      const readDataUrlPromise = new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(file);
-      });
+      const compressToPreviewDataUrl = (fileToCompress) => {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const img = new window.Image();
+            img.onload = () => {
+              const maxDim = 1200;
+              let { width, height } = img;
+              if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                  height = Math.round((height * maxDim) / width);
+                  width = maxDim;
+                } else {
+                  width = Math.round((width * maxDim) / height);
+                  height = maxDim;
+                }
+              }
+              const canvas = document.createElement('canvas');
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, width, height);
+              resolve(canvas.toDataURL('image/jpeg', 0.85));
+            };
+            img.onerror = () => resolve(null);
+            img.src = e.target.result;
+          };
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(fileToCompress);
+        });
+      };
 
       const formData = new FormData();
       formData.append('file', file);
@@ -94,7 +119,7 @@ export default function App() {
           method: 'POST',
           body: formData,
         }),
-        readDataUrlPromise
+        compressToPreviewDataUrl(file)
       ]);
 
       if (!res.ok) throw new Error('Error al procesar la foto');
@@ -161,7 +186,7 @@ export default function App() {
   const triggerApplyDecor = async (
     imageId = activeImage?.image_id,
     wallId = selectedWallId,
-    panelId = selectedPanelId,
+    panelId = selectedPanelId || (panels.length > 0 ? panels[0].id : ''),
     currentScale = scale,
     currentRot = rotation,
     currentShading = shadingStrength,
@@ -172,7 +197,18 @@ export default function App() {
     currentIs3D = is3DActive,
     switchToCompare = true
   ) => {
-    if (!imageId || !panelId) return;
+    if (!imageId) return;
+
+    let targetPanelId = panelId;
+    if (!targetPanelId && panels.length > 0) {
+      targetPanelId = panels[0].id;
+      setSelectedPanelId(targetPanelId);
+    }
+    if (!targetPanelId) {
+      setErrorMessage(t('catalog.subtitle'));
+      return;
+    }
+
     // Si no hay ninguna pared o máscara seleccionada ni cuadrilátero 3D activo, no renderizar
     if (!wallId && !customMask && !customBox && !pointCoords && (!currentIs3D || !currentPerspectiveQuad)) return;
 
@@ -182,7 +218,7 @@ export default function App() {
       const payload = {
         image_id: imageId,
         wall_id: wallId || 'wall_1',
-        panel_id: panelId,
+        panel_id: targetPanelId,
         scale: currentScale,
         rotation: currentRot,
         shading_strength: currentShading,
@@ -201,15 +237,22 @@ export default function App() {
         payload.perspective_quad = currentPerspectiveQuad;
       }
 
-      if (activeImage?.localDataUrl) {
-        payload.image_base64 = activeImage.localDataUrl;
-      }
-
-      const res = await fetch('/api/apply-decor', {
+      // 1. Envío ultraligero (JSON de pocos KB para respuesta casi instantánea)
+      let res = await fetch('/api/apply-decor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+
+      // 2. Si el servidor reinició y perdió la sesión (404), reintentar automáticamente con la foto comprimida
+      if (res.status === 404 && activeImage?.localDataUrl) {
+        payload.image_base64 = activeImage.localDataUrl;
+        res = await fetch('/api/apply-decor', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
 
       if (!res.ok) {
         if (res.status === 502 || res.status === 503 || res.status === 504) {

@@ -98,8 +98,8 @@ class BlendingEngine:
         height_left = np.linalg.norm(dst_quad[3] - dst_quad[0])
         height_right = np.linalg.norm(dst_quad[2] - dst_quad[1])
 
-        plane_w = max(100, int(max(width_top, width_bot)))
-        plane_h = max(100, int(max(height_left, height_right)))
+        plane_w = max(100, min(1600, int(max(width_top, width_bot))))
+        plane_h = max(100, min(1600, int(max(height_left, height_right))))
 
         # Generar textura continua plana a escala proporcional (1.10 x 2.80)
         flat_tiled = cls.tile_texture(texture_bgr, plane_w, plane_h, scale=scale, rotation=rotation)
@@ -107,7 +107,7 @@ class BlendingEngine:
         src_pts = np.float32([[0, 0], [plane_w, 0], [plane_w, plane_h], [0, plane_h]])
         M = cv2.getPerspectiveTransform(src_pts, dst_quad)
 
-        warped = cv2.warpPerspective(flat_tiled, M, (target_w, target_h), flags=cv2.INTER_LANCZOS4)
+        warped = cv2.warpPerspective(flat_tiled, M, (target_w, target_h), flags=cv2.INTER_LINEAR)
         return warped
 
     @staticmethod
@@ -126,8 +126,16 @@ class BlendingEngine:
         if mean_luminance < 15.0:
             mean_luminance = 128.0
 
-        # Filtro guiado bilateral para mantener gradientes suaves de luz y bordes de sombras
-        blurred_gray = cv2.bilateralFilter(gray.astype(np.uint8), 9, 85, 85).astype(np.float32)
+        # Filtro guiado bilateral optimizado con downsampling adaptativo para respuesta instantánea (<20ms) y cero lag
+        gh, gw = gray.shape[:2]
+        max_shading_dim = 800
+        if max(gh, gw) > max_shading_dim:
+            down_scale = max_shading_dim / float(max(gh, gw))
+            small_gray = cv2.resize(gray.astype(np.uint8), (int(gw * down_scale), int(gh * down_scale)), interpolation=cv2.INTER_AREA)
+            small_blurred = cv2.bilateralFilter(small_gray, 7, 75, 75).astype(np.float32)
+            blurred_gray = cv2.resize(small_blurred, (gw, gh), interpolation=cv2.INTER_LINEAR)
+        else:
+            blurred_gray = cv2.bilateralFilter(gray.astype(np.uint8), 7, 75, 75).astype(np.float32)
 
         # Factor multiplicativo relativo de iluminación
         ratio = blurred_gray / mean_luminance

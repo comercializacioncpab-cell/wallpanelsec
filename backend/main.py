@@ -549,6 +549,8 @@ def estimate_perspective(req: EstimatePerspectiveRequest):
 @app.post("/api/apply-decor")
 def apply_decor(req: ApplyDecorRequest):
     session = SESSION_STORE.get(req.image_id)
+
+    needs_ai_detection = not req.mask_base64 and not req.custom_box and not req.custom_polygon and not req.perspective_quad
     
     # 1. Rehidratar inmediatamente desde image_base64 enviada por el cliente si el servidor se reinició
     if not session and req.image_base64:
@@ -560,17 +562,31 @@ def apply_decor(req: ApplyDecorRequest):
             nparr = np.frombuffer(raw_bytes, np.uint8)
             img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             if img_bgr is not None:
-                detection_res = wall_detector.detect_walls_and_foreground(img_bgr)
-                wall_masks = {w["id"]: w["mask"] for w in detection_res["walls"]}
+                max_dim = 1600
+                h, w = img_bgr.shape[:2]
+                if max(h, w) > max_dim:
+                    sc = max_dim / float(max(h, w))
+                    img_bgr = cv2.resize(img_bgr, (int(w * sc), int(h * sc)), interpolation=cv2.INTER_AREA)
+
+                if needs_ai_detection:
+                    detection_res = wall_detector.detect_walls_and_foreground(img_bgr)
+                    wall_masks = {w["id"]: w["mask"] for w in detection_res["walls"]}
+                    fg_mask = detection_res["foreground_mask"]
+                    w_info = detection_res["walls"]
+                else:
+                    wall_masks = {}
+                    fg_mask = None
+                    w_info = []
+
                 session = {
                     "image_bgr": img_bgr,
                     "filename": f"{req.image_id}.jpg",
-                    "walls_info": detection_res["walls"],
+                    "walls_info": w_info,
                     "wall_masks": wall_masks,
-                    "foreground_mask": detection_res["foreground_mask"]
+                    "foreground_mask": fg_mask
                 }
                 SESSION_STORE[req.image_id] = session
-                print(f"[DecorWall AI] Sesión {req.image_id} rehidratada con éxito desde image_base64 del cliente")
+                print(f"[DecorWall AI] Sesión {req.image_id} rehidratada al instante desde image_base64")
         except Exception as e:
             print(f"[DecorWall AI] Error rehidratando sesión desde image_base64: {e}")
 
@@ -582,14 +598,22 @@ def apply_decor(req: ApplyDecorRequest):
             if os.path.exists(dpath) and os.path.isfile(dpath):
                 img_bgr = cv2.imread(dpath)
                 if img_bgr is not None:
-                    detection_res = wall_detector.detect_walls_and_foreground(img_bgr)
-                    wall_masks = {w["id"]: w["mask"] for w in detection_res["walls"]}
+                    if needs_ai_detection:
+                        detection_res = wall_detector.detect_walls_and_foreground(img_bgr)
+                        wall_masks = {w["id"]: w["mask"] for w in detection_res["walls"]}
+                        fg_mask = detection_res["foreground_mask"]
+                        w_info = detection_res["walls"]
+                    else:
+                        wall_masks = {}
+                        fg_mask = None
+                        w_info = []
+
                     session = {
                         "image_bgr": img_bgr,
                         "filename": os.path.basename(dpath),
-                        "walls_info": detection_res["walls"],
+                        "walls_info": w_info,
                         "wall_masks": wall_masks,
-                        "foreground_mask": detection_res["foreground_mask"]
+                        "foreground_mask": fg_mask
                     }
                     SESSION_STORE[req.image_id] = session
                     break
@@ -611,14 +635,22 @@ def apply_decor(req: ApplyDecorRequest):
             try:
                 img_bgr = cv2.imread(matched_file)
                 if img_bgr is not None:
-                    detection_res = wall_detector.detect_walls_and_foreground(img_bgr)
-                    wall_masks = {w["id"]: w["mask"] for w in detection_res["walls"]}
+                    if needs_ai_detection:
+                        detection_res = wall_detector.detect_walls_and_foreground(img_bgr)
+                        wall_masks = {w["id"]: w["mask"] for w in detection_res["walls"]}
+                        fg_mask = detection_res["foreground_mask"]
+                        w_info = detection_res["walls"]
+                    else:
+                        wall_masks = {}
+                        fg_mask = None
+                        w_info = []
+
                     session = {
                         "image_bgr": img_bgr,
                         "filename": os.path.basename(matched_file),
-                        "walls_info": detection_res["walls"],
+                        "walls_info": w_info,
                         "wall_masks": wall_masks,
-                        "foreground_mask": detection_res["foreground_mask"]
+                        "foreground_mask": fg_mask
                     }
                     SESSION_STORE[req.image_id] = session
             except Exception as e:
