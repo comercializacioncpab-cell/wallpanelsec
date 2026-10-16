@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Eye, EyeOff, MoveHorizontal, Smartphone, Monitor, Sparkles, Layers } from 'lucide-react';
+import { Eye, EyeOff, MoveHorizontal, Smartphone, Monitor, Sparkles, Layers, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
 export default function BeforeAfterSlider({
   originalSrc,
@@ -12,17 +12,30 @@ export default function BeforeAfterSlider({
 }) {
   const [sliderPosition, setSliderPosition] = useState(30); // Mostrar 70% del panel por defecto al llegar
   const [isDragging, setIsDragging] = useState(false);
+  
+  // Estados de Zoom y Desplazamiento (Pan)
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPinching, setIsPinching] = useState(false);
+
   const containerRef = useRef(null);
+  const pinchStartDistRef = useRef(0);
+  const pinchStartCenterRef = useRef({ x: 0, y: 0 });
+  const pinchStartZoomRef = useRef(1);
+  const pinchStartPanRef = useRef({ x: 0, y: 0 });
 
   const isVertical = orientation === 'vertical' || dimensions.height > dimensions.width;
 
+  // Cálculo del deslizador compensando el Zoom y el Pan activo
   const handleMove = useCallback((clientX) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const pos = (x / rect.width) * 100;
+    const w = rect.width;
+    // Mapear clientX a coordenadas locales de la imagen considerando zoom y pan
+    const localX = w / 2 + (clientX - rect.left - pan.x - w / 2) / zoom;
+    const pos = (localX / w) * 100;
     setSliderPosition(Math.max(0, Math.min(100, pos)));
-  }, []);
+  }, [zoom, pan]);
 
   const handleMouseDown = (e) => {
     setIsDragging(true);
@@ -30,8 +43,46 @@ export default function BeforeAfterSlider({
   };
 
   const handleTouchStart = (e) => {
-    setIsDragging(true);
-    handleMove(e.touches[0].clientX);
+    if (e.touches.length === 1) {
+      setIsPinching(false);
+      setIsDragging(true);
+      handleMove(e.touches[0].clientX);
+    } else if (e.touches.length === 2) {
+      // Inicio de gesto con 2 dedos: Zoom y Panorámica
+      setIsDragging(false);
+      setIsPinching(true);
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+      pinchStartDistRef.current = dist || 1;
+      pinchStartCenterRef.current = {
+        x: (t0.clientX + t1.clientX) / 2,
+        y: (t0.clientY + t1.clientY) / 2
+      };
+      pinchStartZoomRef.current = zoom;
+      pinchStartPanRef.current = { ...pan };
+    }
+  };
+
+  // Controles de zoom táctil y botones
+  const handleZoomIn = () => {
+    setZoom((prev) => Math.min(4.5, prev * 1.35));
+  };
+
+  const handleZoomOut = () => {
+    setZoom((prev) => {
+      const next = Math.max(1, prev / 1.35);
+      if (next <= 1.05) {
+        setPan({ x: 0, y: 0 });
+        return 1;
+      }
+      return next;
+    });
+  };
+
+  const handleResetZoom = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
   };
 
   useEffect(() => {
@@ -39,22 +90,89 @@ export default function BeforeAfterSlider({
     const handleMouseMove = (e) => {
       if (isDragging) handleMove(e.clientX);
     };
+
     const handleTouchMove = (e) => {
-      if (isDragging) handleMove(e.touches[0].clientX);
+      if (e.touches.length === 2 && isPinching) {
+        // Gesto de 2 dedos: pellizcar para zoom + arrastrar para explorar
+        const t0 = e.touches[0];
+        const t1 = e.touches[1];
+        const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+        const ratio = dist / (pinchStartDistRef.current || 1);
+        const nextZoom = Math.max(1, Math.min(4.5, pinchStartZoomRef.current * ratio));
+
+        const center = {
+          x: (t0.clientX + t1.clientX) / 2,
+          y: (t0.clientY + t1.clientY) / 2
+        };
+        const dx = center.x - pinchStartCenterRef.current.x;
+        const dy = center.y - pinchStartCenterRef.current.y;
+
+        const rect = containerRef.current ? containerRef.current.getBoundingClientRect() : { width: 400, height: 400 };
+        const maxPanX = (rect.width * (nextZoom - 1)) / 2;
+        const maxPanY = (rect.height * (nextZoom - 1)) / 2;
+
+        const rawPanX = pinchStartPanRef.current.x + dx;
+        const rawPanY = pinchStartPanRef.current.y + dy;
+
+        setZoom(nextZoom);
+        setPan({
+          x: Math.max(-maxPanX, Math.min(maxPanX, rawPanX)),
+          y: Math.max(-maxPanY, Math.min(maxPanY, rawPanY))
+        });
+      } else if (e.touches.length === 1 && isDragging) {
+        handleMove(e.touches[0].clientX);
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      if (e.touches.length === 0) {
+        setIsDragging(false);
+        setIsPinching(false);
+        if (zoom <= 1.05) {
+          setZoom(1);
+          setPan({ x: 0, y: 0 });
+        }
+      } else if (e.touches.length === 1) {
+        setIsPinching(false);
+      }
     };
 
     window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('touchend', handleMouseUp);
+    window.addEventListener('touchend', handleTouchEnd);
     window.addEventListener('touchmove', handleTouchMove);
 
     return () => {
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('touchend', handleMouseUp);
+      window.removeEventListener('touchend', handleTouchEnd);
       window.removeEventListener('touchmove', handleTouchMove);
     };
-  }, [isDragging, handleMove]);
+  }, [isDragging, isPinching, zoom, handleMove]);
+
+  // Soporte de zoom con rueda de ratón en escritorio
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onWheel = (e) => {
+      if (e.ctrlKey || e.metaKey || Math.abs(e.deltaY) > 0) {
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.15 : 0.88;
+        setZoom((prev) => {
+          const next = Math.max(1, Math.min(4.5, prev * factor));
+          if (next <= 1.05) {
+            setPan({ x: 0, y: 0 });
+            return 1;
+          }
+          return next;
+        });
+      }
+    };
+
+    container.addEventListener('wheel', onWheel, { passive: false });
+    return () => container.removeEventListener('wheel', onWheel);
+  }, []);
 
   return (
     <div className="flex flex-col gap-3 w-full">
@@ -63,7 +181,7 @@ export default function BeforeAfterSlider({
         <div className="flex items-center gap-2 font-medium">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
           <span className="text-slate-200 font-semibold">Comparador Fotorrealista:</span>
-          <span>Desliza la barra para ver el cambio</span>
+          <span className="hidden sm:inline">Desliza la barra para ver el cambio o pellizca con 2 dedos para zoom</span>
         </div>
 
         {/* Acceso rápido a estados 100% */}
@@ -105,7 +223,7 @@ export default function BeforeAfterSlider({
         </div>
       </div>
 
-      {/* Contenedor con clip-path exacto sin deformación y márgenes seguros para scroll en celular */}
+      {/* Contenedor interactivo con clip-path exacto y soporte de Zoom con 2 dedos */}
       <div className="flex items-center justify-center w-full bg-slate-950/40 px-3 sm:px-6 py-2.5 rounded-2xl relative">
         <div
           ref={containerRef}
@@ -120,53 +238,126 @@ export default function BeforeAfterSlider({
           }}
           className="relative bg-slate-900 rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl select-none cursor-ew-resize group touch-none shrink-0 sm:w-full sm:max-w-full"
         >
-          {/* Capa de imagen transformada (DESPUÉS: abajo completa) */}
-          <img
-            src={transformedSrc}
-            alt="Después con panel decorativo"
-            className="absolute inset-0 w-full h-full block pointer-events-none select-none object-contain"
-          />
-
-          {/* Capa de imagen original (ANTES: arriba con recorte CSS clip-path perfecto) */}
+          {/* Capa sincronizada de Zoom y Panorámica (mantiene alineados Antes, Después y la Línea) */}
           <div
-            className="absolute inset-0 w-full h-full pointer-events-none transition-none"
             style={{
-              clipPath: `inset(0 ${100 - sliderPosition}% 0 0)`
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: 'center center',
+              transition: isPinching ? 'none' : 'transform 0.12s ease-out'
             }}
+            className="absolute inset-0 w-full h-full pointer-events-none will-change-transform"
           >
+            {/* Capa de imagen transformada (DESPUÉS: abajo completa) */}
             <img
-              src={originalSrc}
-              alt="Antes original"
-              className="absolute inset-0 w-full h-full block pointer-events-none select-none object-contain"
+              src={transformedSrc}
+              alt="Después con panel decorativo"
+              className="absolute inset-0 w-full h-full block select-none object-contain"
             />
 
-            {/* Etiqueta ANTES */}
-            <div className="absolute top-4 left-4 px-3 py-1.5 rounded-lg bg-black/75 backdrop-blur-md text-white text-xs font-black tracking-wider uppercase border border-white/20 shadow-lg pointer-events-none flex items-center gap-1.5 z-10">
-              <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-              Original (Antes)
+            {/* Capa de imagen original (ANTES: arriba con recorte CSS clip-path perfecto) */}
+            <div
+              className="absolute inset-0 w-full h-full transition-none"
+              style={{
+                clipPath: `inset(0 ${100 - sliderPosition}% 0 0)`
+              }}
+            >
+              <img
+                src={originalSrc}
+                alt="Antes original"
+                className="absolute inset-0 w-full h-full block select-none object-contain"
+              />
+            </div>
+
+            {/* Línea divisoria y manija de arrastre sincronizada en el mismo espacio de coordenadas */}
+            <div
+              className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_15px_rgba(0,0,0,0.85)] z-20 pointer-events-none"
+              style={{
+                left: `${sliderPosition}%`,
+                transition: isDragging ? 'none' : 'left 0.1s ease-out'
+              }}
+            >
+              <div
+                style={{
+                  transform: `translate(-50%, -50%) scale(${1 / Math.sqrt(Math.max(1, zoom))})`
+                }}
+                className="absolute top-1/2 left-1/2 w-10 h-10 rounded-full bg-white text-slate-900 flex items-center justify-center shadow-2xl border-2 border-slate-900"
+              >
+                <MoveHorizontal className="w-5 h-5 text-slate-900" />
+              </div>
             </div>
           </div>
 
-          {/* Etiqueta DESPUÉS */}
+          {/* Etiquetas fijas en esquinas (permanecen visibles sin salir de la pantalla al hacer zoom) */}
+          <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-md text-white text-[11px] font-black tracking-wider uppercase border border-white/20 shadow-lg pointer-events-none flex items-center gap-1.5 z-20">
+            <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+            Original (Antes)
+          </div>
+
           {sliderPosition < 85 && (
-            <div className="absolute top-4 right-4 px-3 py-1.5 rounded-lg bg-amber-500/90 backdrop-blur-md text-slate-950 text-xs font-black tracking-wider uppercase border border-amber-400/50 shadow-lg pointer-events-none flex items-center gap-1.5 z-10">
+            <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-amber-500/90 backdrop-blur-md text-slate-950 text-[11px] font-black tracking-wider uppercase border border-amber-400/50 shadow-lg pointer-events-none flex items-center gap-1.5 z-20">
               <span className="w-2 h-2 rounded-full bg-slate-950"></span>
-              {panelTitle || 'Con Panel Decorativo'}
+              {panelTitle || 'Con Panel'}
             </div>
           )}
 
-          {/* Línea divisoria y manija de arrastre */}
-          <div
-            className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_15px_rgba(0,0,0,0.8)] cursor-ew-resize z-20 pointer-events-none"
-            style={{
-              left: `${sliderPosition}%`,
-              transition: isDragging ? 'none' : 'left 0.1s ease-out'
-            }}
-          >
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white text-slate-900 flex items-center justify-center shadow-2xl border-2 border-slate-900 group-hover:scale-110 active:scale-95 transition-transform">
-              <MoveHorizontal className="w-5 h-5 text-slate-900" />
-            </div>
+          {/* Controles flotantes de Zoom interactivo (+, -, 1x / Reset) */}
+          <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-slate-950/85 backdrop-blur-md p-1 rounded-xl border border-slate-700/80 shadow-2xl z-20 text-xs">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleZoomOut();
+              }}
+              disabled={zoom <= 1}
+              className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white cursor-pointer transition-all active:scale-95"
+              title="Alejar zoom"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleResetZoom();
+              }}
+              className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 font-mono font-bold cursor-pointer transition-all text-[11px]"
+              title="Restablecer zoom a 1x"
+            >
+              {zoom.toFixed(1)}x
+            </button>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleZoomIn();
+              }}
+              disabled={zoom >= 4.5}
+              className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white cursor-pointer transition-all active:scale-95"
+              title="Acercar zoom"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+
+            {zoom > 1.05 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleResetZoom();
+                }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 cursor-pointer transition-all active:scale-95"
+                title="Restablecer vista normal"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
+
+          {/* Banner indicador cuando hay zoom activo */}
+          {zoom > 1.05 && (
+            <div className="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg bg-slate-950/85 backdrop-blur-md border border-amber-500/30 text-[11px] text-amber-300 font-medium z-20 pointer-events-none flex items-center gap-1.5 shadow-lg">
+              <Sparkles className="w-3 h-3 text-amber-400 animate-pulse" />
+              <span>Arrastra con 2 dedos para explorar</span>
+            </div>
+          )}
 
           {/* Spinner si está procesando */}
           {isProcessing && (
